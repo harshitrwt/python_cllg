@@ -1,4 +1,4 @@
-# SmartPriceWatcher 🛒📉
+# SmartPriceWatcher 
 
 ### AI-Powered Product Price Tracker with RAG Insights
 
@@ -17,7 +17,7 @@ The project combines **web scraping, price monitoring, visualization, and Retrie
 
 ---
 
-# 🚀 Features
+# Features
 
 ### Core Features
 
@@ -38,45 +38,8 @@ The project combines **web scraping, price monitoring, visualization, and Retrie
 
 ---
 
-# 🧠 Why RAG?
 
-RAG (Retrieval-Augmented Generation) allows the AI to answer questions **using your stored price data rather than guessing**.
-
-Instead of:
-
-```
-User → AI → Random answer
-```
-
-We use:
-
-```
-User → Retrieve relevant data → AI generates answer
-```
-
-This makes responses **accurate and personalized**.
-
-Example:
-
-User asks:
-
-```
-Should I buy the headphones now?
-```
-
-System retrieves:
-
-```
-Price history data
-Recent price changes
-Target price
-```
-
-AI then analyzes and responds.
-
----
-
-# 🏗 System Architecture
+# System Architecture
 
 ```
             ┌───────────────────┐
@@ -117,7 +80,7 @@ AI then analyzes and responds.
 
 ---
 
-# 🔄 Application Workflow
+# Application Workflow
 
 ```
 User Login
@@ -147,7 +110,7 @@ Generate Price Insights (AI)
 
 ---
 
-# 🧑‍💻 User Interface Navigation
+# User Interface Navigation
 
 The UI is designed to be **minimal and intuitive**.
 
@@ -220,7 +183,7 @@ AI retrieves relevant price history and answers.
 
 ---
 
-# 🗂 Project Structure
+# Project Structure
 
 ```
 SmartPriceWatcher/
@@ -245,7 +208,7 @@ requirements.txt
 
 ---
 
-# 📊 Data Storage
+# Data Storage
 
 The system uses **SQLite**.
 
@@ -267,9 +230,9 @@ The system uses **SQLite**.
 
 ---
 
-# 🤖 AI Model Choice (Lightweight)
+#  AI Model Choice
 
-To keep the system **lightweight and cheap**, we use small embedding models.
+To keep the system **lightweight**, we use small embedding models.
 
 Recommended models:
 
@@ -336,7 +299,7 @@ Vector DB: FAISS
 
 ---
 
-# 📉 Price Monitoring Scheduler
+# Price Monitoring Scheduler
 
 The application runs a background scheduler.
 
@@ -358,7 +321,7 @@ Check alert condition
 
 ---
 
-# 📈 Price Insight Generation
+# Price Insight Generation
 
 Example stored data:
 
@@ -383,27 +346,9 @@ This may be a good time to purchase.
 
 ---
 
-# ⚡ Performance
-
-This project is designed to be **lightweight**.
-
-Typical resource usage:
-
-```
-RAM: ~300MB
-CPU: Low
-Storage: < 50MB
-```
-
-Works easily on:
-
-* Replit
-* Laptop
-* Small cloud VM
-
 ---
 
-# 🔮 Future Enhancements
+# Future Enhancements
 
 Possible upgrades:
 
@@ -429,30 +374,9 @@ AI finds unusually low prices.
 
 ---
 
-# 🧪 Example User Journey
 
-```
-User creates account
-      │
-      ▼
-Adds product URL
-      │
-      ▼
-System tracks price automatically
-      │
-      ▼
-User checks dashboard
-      │
-      ▼
-AI analyzes price history
-      │
-      ▼
-User receives buying recommendation
-```
 
----
-
-# 🛠 Installation
+#  Installation
 
 Install dependencies:
 
@@ -468,7 +392,7 @@ streamlit run app.py
 
 ---
 
-# 🎯 Project Goal
+# Project Goal
 
 The goal of SmartPriceWatcher is to demonstrate:
 
@@ -483,6 +407,4 @@ It serves as a **complete AI-powered data product project** suitable for portfol
 
 ---
 
-# 📜 License
-
-MIT License
+### in progress ...
