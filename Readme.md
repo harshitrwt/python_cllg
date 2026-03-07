@@ -13,7 +13,7 @@ Users can:
 * Receive alerts when prices drop below a target
 * Ask an AI assistant questions about their price data
 
-The project combines **web scraping, price monitoring, visualization, and Retrieval-Augmented Generation (RAG)** to generate insights from collected price history.
+The project combines **web scraping, price monitoring, visualization, and (RAG)** to generate insights from collected price history.
 
 ---
 
