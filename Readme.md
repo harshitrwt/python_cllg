@@ -61,21 +61,14 @@ The project combines **web scraping, price monitoring, visualization, and (RAG)*
                   │       │
         ┌─────────▼─┐   ┌─▼──────────┐
         │  Scraper  │   │  Database  │
-        │BeautifulSoup│ │  SQLite    │
+        │BeautifulSoup│ │  Firebase    │
         └──────┬─────┘   └─────┬─────┘
                │               │
                │               │
          Product Pages     Price History
                │               │
-               ▼               ▼
-        ┌─────────────────────────┐
-        │      Vector Store       │
-        │  (FAISS / ChromaDB)     │
-        └───────────┬─────────────┘
-                    │
-                    ▼
-              AI Assistant
-        (Lightweight LLM + RAG)
+                 AI Assistant
+        
 ```
 
 ---
