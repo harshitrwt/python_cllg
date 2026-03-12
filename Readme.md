@@ -38,41 +38,6 @@ The project combines **web scraping, price monitoring, visualization, and (RAG)*
 
 ---
 
-
-# System Architecture
-
-```
-            ┌───────────────────┐
-            │      User UI      │
-            │  (Streamlit App)  │
-            └─────────┬─────────┘
-                      │
-                      │
-             User Interaction
-                      │
-          ┌───────────▼───────────┐
-          │     Backend Logic     │
-          │                       │
-          │  • Authentication     │
-          │  • Watchlist Manager  │
-          │  • Price Tracker      │
-          └───────┬───────┬───────┘
-                  │       │
-                  │       │
-        ┌─────────▼─┐   ┌─▼──────────┐
-        │  Scraper  │   │  Database  │
-        │BeautifulSoup│ │  Firebase    │
-        └──────┬─────┘   └─────┬─────┘
-               │               │
-               │               │
-         Product Pages     Price History
-               │               │
-                 AI Assistant
-        
-```
-
----
-
 # Application Workflow
 
 ```
