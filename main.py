@@ -1,6 +1,7 @@
 import streamlit as st
 import logging
 from datetime import datetime
+from database.firebase_db import FirebaseDB
 
 # Configure page
 st.set_page_config(
@@ -38,6 +39,14 @@ if "user_logged_in" not in st.session_state:
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
 
+# Initialize FirebaseDB
+if "db" not in st.session_state:
+    try:
+        st.session_state.db = FirebaseDB()
+    except Exception as e:
+        st.error(f"Failed to connect to Firebase: {e}")
+        st.stop()
+
 
 def show_login_page():
     """Display login/signup page"""
@@ -57,10 +66,18 @@ def show_login_page():
             
             if st.button("Login", use_container_width=True):
                 if email and password:
-                    st.session_state.user_logged_in = True
-                    st.session_state.current_user = email
-                    st.success(f"Welcome back, {email}!")
-                    st.rerun()
+                    user_data = st.session_state.db.get_user(email)
+                    if user_data:
+                        # In a real app, hash and check passwords
+                        if user_data.get("password") == password:
+                            st.session_state.user_logged_in = True
+                            st.session_state.current_user = email
+                            st.success(f"Welcome back, {email}!")
+                            st.rerun()
+                        else:
+                            st.error("Incorrect password")
+                    else:
+                        st.error("User not found. Please sign up.")
                 else:
                     st.error("Please enter email and password")
         
@@ -73,10 +90,22 @@ def show_login_page():
             if st.button("Sign Up", use_container_width=True):
                 if new_email and new_password and confirm_password:
                     if new_password == confirm_password:
-                        st.session_state.user_logged_in = True
-                        st.session_state.current_user = new_email
-                        st.success(f"Account created! Welcome, {new_email}!")
-                        st.rerun()
+                        # Check if user already exists
+                        if st.session_state.db.get_user(new_email):
+                            st.error("User already exists with this email")
+                        else:
+                            # Add to Firebase
+                            success = st.session_state.db.add_user(new_email, {
+                                "email": new_email,
+                                "password": new_password # Simplified for now
+                            })
+                            if success:
+                                st.session_state.user_logged_in = True
+                                st.session_state.current_user = new_email
+                                st.success(f"Account created! Welcome, {new_email}!")
+                                st.rerun()
+                            else:
+                                st.error("Failed to create account in database")
                     else:
                         st.error("Passwords don't match")
                 else:
@@ -129,17 +158,20 @@ def show_dashboard():
     """Dashboard view"""
     st.title("📊 Dashboard")
     
+    watchlist = st.session_state.db.get_watchlist(st.session_state.current_user)
+    alerts = st.session_state.db.get_user_alerts(st.session_state.current_user)
+    
     # Summary cards
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("Products Watching", 5, delta="2 new")
+        st.metric("Products Watching", len(watchlist))
     with col2:
-        st.metric("Price Alerts", 3, delta=1)
+        st.metric("Price Alerts", len(alerts))
     with col3:
-        st.metric("Avg. Savings", "₹2,450", delta="↓ 12%")
+        st.metric("Avg. Savings", "₹0", delta="0%")
     with col4:
-        st.metric("Best Deal Today", "Laptop", delta="↓ ₹5,000")
+        st.metric("Best Deal", "N/A", delta="None")
     
     st.divider()
     
@@ -148,17 +180,21 @@ def show_dashboard():
     
     import pandas as pd
     
-    # im using dummy data 
-    activity_data = {
-        "Product": ["Laptop", "Phone", "Headphones", "Smartwatch"],
-        "Platform": ["Amazon", "Flipkart", "Amazon", "Flipkart"],
-        "Current Price": ["₹1,24,999", "₹84,999", "₹24,499", "₹41,999"],
-        "Change": ["-₹5,000", "-₹2,000", "+₹500", "-₹1,000"],
-        "Status": ["🔴 Alert!", "🟢 Down", "🔵 Up", "🟢 Down"]
-    }
-    
-    df = pd.DataFrame(activity_data)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    if watchlist:
+        activity_data = []
+        for item in watchlist[:5]: # Show last 5
+            product_data = item.get("product_data", {})
+            activity_data.append({
+                "Product": product_data.get("title", "New Product"),
+                "Platform": product_data.get("platform", "Unknown").capitalize(),
+                "Current Price": f"₹{product_data.get('price', 0.0):,.2f}",
+                "Status": "🔍 Tracking"
+            })
+        
+        df = pd.DataFrame(activity_data)
+        st.dataframe(df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No activity yet. Add products to see them here.")
 
 
 def show_watchlist():
@@ -172,20 +208,47 @@ def show_watchlist():
         url = st.text_input("Product URL", placeholder="https://amazon.com/dp/...")
     with col2:
         if st.button("Add", use_container_width=True):
-            st.success("✅ Added to watchlist!")
+            if url:
+                # Basic validation
+                if "amazon" in url or "flipkart" in url:
+                    # Minimal data for now
+                    dummy_data = {
+                        "title": url.split("/")[-1][:30] + "...", # Basic title from URL
+                        "price": 0.0,
+                        "currency": "INR",
+                        "platform": "amazon" if "amazon" in url else "flipkart"
+                    }
+                    success = st.session_state.db.add_to_watchlist(st.session_state.current_user, url, dummy_data)
+                    if success:
+                        st.success("✅ Added to watchlist!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Failed to add to watchlist")
+                else:
+                    st.error("Please enter a valid Amazon or Flipkart URL")
+            else:
+                st.error("Please enter a URL")
     
     st.divider()
     st.subheader("📦 Your Products")
     
-    import pandas as pd
-    data = {
-        "Product": ["Dell XPS 13", "iPhone 15 Pro", "Sony Headphones"],
-        "Price": ["₹1,24,999", "₹84,999", "₹24,499"],
-        "Target": ["₹1,10,000", "₹75,000", "₹20,000"],
-        "Change": ["-₹5,000", "-₹2,000", "-₹3,499"]
-    }
-    df = pd.DataFrame(data)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    watchlist = st.session_state.db.get_watchlist(st.session_state.current_user)
+    
+    if watchlist:
+        display_data = []
+        for item in watchlist:
+            product_data = item.get("product_data", {})
+            display_data.append({
+                "Product": product_data.get("title", "Unknown"),
+                "Price": f"₹{product_data.get('price', 0.0):,.2f}",
+                "Target": f"₹{item.get('target_price', 0.0) or 0.0:,.2f}",
+                "Added At": item.get("added_at").strftime("%Y-%m-%d") if item.get("added_at") else "N/A"
+            })
+        
+        df = pd.DataFrame(display_data)
+        st.dataframe(df, use_container_width=True, hide_index=True)
+    else:
+        st.info("Your watchlist is empty. Add a product to get started!")
 
 
 def show_ai_assistant():

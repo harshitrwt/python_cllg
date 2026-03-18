@@ -31,7 +31,7 @@ class FirebaseDB:
             raise
     
     def add_user(self, user_id: str, user_data: Dict) -> bool:
-        """Add a new user"""
+        """Add a new user (user_id is the email)"""
         try:
             self.db.collection("users").document(user_id).set({
                 **user_data,
@@ -43,6 +43,17 @@ class FirebaseDB:
         except Exception as e:
             logger.error(f"Error adding user: {e}")
             return False
+    
+    def get_user(self, user_id: str) -> Optional[Dict]:
+        """Get user data by email"""
+        try:
+            doc = self.db.collection("users").document(user_id).get()
+            if doc.exists:
+                return doc.to_dict()
+            return None
+        except Exception as e:
+            logger.error(f"Error fetching user: {e}")
+            return None
     
     def add_to_watchlist(self, user_id: str, product_url: str, product_data: Dict) -> bool:
         """Add product to user's watchlist"""
