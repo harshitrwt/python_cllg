@@ -66,6 +66,7 @@ def show_login_page():
             
             if st.button("Login", use_container_width=True):
                 if email and password:
+                    email = email.lower().strip()
                     user_data = st.session_state.db.get_user(email)
                     if user_data:
                         # In a real app, hash and check passwords
@@ -89,6 +90,7 @@ def show_login_page():
             
             if st.button("Sign Up", use_container_width=True):
                 if new_email and new_password and confirm_password:
+                    new_email = new_email.lower().strip()
                     if new_password == confirm_password:
                         # Check if user already exists
                         if st.session_state.db.get_user(new_email):
@@ -218,12 +220,15 @@ def show_watchlist():
                         "currency": "INR",
                         "platform": "amazon" if "amazon" in url else "flipkart"
                     }
-                    success = st.session_state.db.add_to_watchlist(st.session_state.current_user, url, dummy_data)
-                    if success:
-                        st.success("✅ Added to watchlist!")
-                        st.rerun()
-                    else:
-                        st.error("❌ Failed to add to watchlist")
+                    with st.spinner("Saving to database..."):
+                        success = st.session_state.db.add_to_watchlist(st.session_state.current_user, url, dummy_data)
+                        if success:
+                            st.toast(f"Added {url} to your list!")
+                            # Small delay to let toast show or just rerun
+                            st.success("✅ Added to watchlist!")
+                            st.rerun()
+                        else:
+                            st.error(f"❌ Database error: Could not save to 'watchlists' collection for user {st.session_state.current_user}")
                 else:
                     st.error("Please enter a valid Amazon or Flipkart URL")
             else:
@@ -235,18 +240,39 @@ def show_watchlist():
     watchlist = st.session_state.db.get_watchlist(st.session_state.current_user)
     
     if watchlist:
-        display_data = []
+        # Create header row
+        header_cols = st.columns([2, 1, 1, 1, 0.5])
+        header_cols[0].markdown("**Product**")
+        header_cols[1].markdown("**Price**")
+        header_cols[2].markdown("**Target**")
+        header_cols[3].markdown("**Added**")
+        header_cols[4].markdown("**Action**")
+        
+        st.divider()
+        
         for item in watchlist:
             product_data = item.get("product_data", {})
-            display_data.append({
-                "Product": product_data.get("title", "Unknown"),
-                "Price": f"₹{product_data.get('price', 0.0):,.2f}",
-                "Target": f"₹{item.get('target_price', 0.0) or 0.0:,.2f}",
-                "Added At": item.get("added_at").strftime("%Y-%m-%d") if item.get("added_at") else "N/A"
-            })
-        
-        df = pd.DataFrame(display_data)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+            added_at = item.get("added_at")
+            if hasattr(added_at, "strftime"):
+                added_date = added_at.strftime("%Y-%m-%d")
+            else:
+                added_date = "N/A"
+            
+            cols = st.columns([2, 1, 1, 1, 0.5])
+            
+            # Display info
+            cols[0].text(product_data.get("title", "Unknown")[:40] + "...")
+            cols[1].text(f"₹{product_data.get('price', 0.0):,.2f}")
+            cols[2].text(f"₹{item.get('target_price', 0.0) or 0.0:,.2f}")
+            cols[3].text(added_date)
+            
+            # Remove button
+            if cols[4].button("🗑️", key=f"remove_{item.get('id')}"):
+                if st.session_state.db.remove_from_watchlist(item.get("id")):
+                    st.success("Removed!")
+                    st.rerun()
+                else:
+                    st.error("Failed to remove")
     else:
         st.info("Your watchlist is empty. Add a product to get started!")
 

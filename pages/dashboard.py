@@ -1,94 +1,74 @@
 """
-Dashboard page - Main overview of user's price tracking
+Dashboard page - Main overview of user's price tracking (Connected to Firebase)
 """
 
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
+from datetime import datetime
+from database.firebase_db import FirebaseDB
 
+def init_db():
+    if "db" not in st.session_state:
+        try:
+            st.session_state.db = FirebaseDB()
+        except Exception as e:
+            st.error(f"Failed to connect to Firebase: {e}")
+            st.stop()
 
 def show_dashboard():
     """Display dashboard page"""
+    init_db()
     st.title("📊 Dashboard")
+    
+    if not st.session_state.get("user_logged_in"):
+        st.warning("Please login first.")
+        return
+
+    db = st.session_state.db
+    user_id = st.session_state.current_user
+    
+    watchlist = db.get_watchlist(user_id)
+    alerts = db.get_user_alerts(user_id)
     
     # Summary cards
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("Products Watching", 5, delta="2 new")
+        st.metric("Products Watching", len(watchlist))
     
     with col2:
-        st.metric("Price Alerts", 3, delta=1)
+        st.metric("Price Alerts", len(alerts))
     
     with col3:
-        st.metric("Avg. Savings", "₹2,450", delta="↓ 12%")
+        st.metric("Avg. Savings", "₹0")
     
     with col4:
-        st.metric("Best Deal Today", "Laptop", delta="₹5,000 drop")
-    
-    st.divider()
-    
-    # Price trends section
-    st.subheader("📈 Recent Price Trends")
-    
-    # Sample data
-    dates = pd.date_range(end=datetime.now(), periods=7)
-    sample_data = {
-        "Date": dates,
-        "Product 1": [15000, 14800, 14500, 14300, 14200, 14100, 14000],
-        "Product 2": [8000, 8200, 8100, 7900, 7800, 7600, 7500],
-        "Product 3": [5500, 5600, 5700, 5600, 5500, 5400, 5300]
-    }
-    
-    fig = go.Figure()
-    
-    for product in ["Product 1", "Product 2", "Product 3"]:
-        fig.add_trace(go.Scatter(
-            x=sample_data["Date"],
-            y=sample_data[product],
-            mode='lines+markers',
-            name=product
-        ))
-    
-    fig.update_layout(
-        title="Price History (7 Days)",
-        xaxis_title="Date",
-        yaxis_title="Price (₹)",
-        hovermode="x unified",
-        height=400
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
+        st.metric("Best Deal Today", "N/A")
     
     st.divider()
     
     # Recent activity
     st.subheader("🔔 Recent Activity")
     
-    activity_data = {
-        "Product": ["Laptop", "Phone", "Headphones", "Smartwatch"],
-        "Price Change": ["-₹5,000", "-₹2,000", "+₹500", "-₹1,000"],
-        "Status": ["🔴 Alert!", "🟢 Down", "🔵 Up", "🟢 Down"],
-        "Time": ["2 hours ago", "4 hours ago", "6 hours ago", "8 hours ago"]
-    }
-    
-    df_activity = pd.DataFrame(activity_data)
-    st.dataframe(df_activity, use_container_width=True, hide_index=True)
-    
-    st.divider()
-    
-    # Top recommendations
-    st.subheader("💡 Recommendations")
-    
-    rec_col1, rec_col2 = st.columns(2)
-    
-    with rec_col1:
-        st.info("**Laptop** is at its 30-day low! Now is a good time to buy.")
-    
-    with rec_col2:
-        st.warning("**Headphones** price increased. Wait for discount.")
-
+    if watchlist:
+        activity_data = []
+        for item in watchlist[:5]:
+            product_data = item.get("product_data", {})
+            added_at = item.get("added_at")
+            time_str = added_at.strftime("%Y-%m-%d") if hasattr(added_at, "strftime") else "Recently"
+            
+            activity_data.append({
+                "Product": product_data.get("title", "New Product"),
+                "Price": f"₹{product_data.get('price', 0.0):,.2f}",
+                "Status": "🟢 Monitoring",
+                "Time": time_str
+            })
+        
+        df_activity = pd.DataFrame(activity_data)
+        st.dataframe(df_activity, use_container_width=True, hide_index=True)
+    else:
+        st.info("No activity found. Start adding products to see them here!")
 
 if __name__ == "__main__":
     show_dashboard()

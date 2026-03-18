@@ -72,14 +72,29 @@ class FirebaseDB:
             return False
     
     def get_watchlist(self, user_id: str) -> List[Dict]:
-        """Get user's watchlist"""
+        """Get user's watchlist with document IDs"""
         try:
             docs = self.db.collection("watchlists").where("user_id", "==", user_id).stream()
-            watchlist = [doc.to_dict() for doc in docs]
+            watchlist = []
+            for doc in docs:
+                data = doc.to_dict()
+                data["id"] = doc.id # Include document ID for deletion
+                watchlist.append(data)
+            logger.info(f"Fetched {len(watchlist)} watchlist items for {user_id}")
             return watchlist
         except Exception as e:
             logger.error(f"Error fetching watchlist: {e}")
             return []
+    
+    def remove_from_watchlist(self, doc_id: str) -> bool:
+        """Remove product from watchlist"""
+        try:
+            self.db.collection("watchlists").document(doc_id).delete()
+            logger.info(f"Product removed from watchlist: {doc_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Error removing from watchlist: {e}")
+            return False
     
     def add_price_history(self, product_url: str, price: float, timestamp: datetime = None) -> bool:
         """Record price history for a product"""
