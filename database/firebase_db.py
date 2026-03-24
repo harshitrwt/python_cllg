@@ -52,17 +52,37 @@ class FirebaseDB:
     
     def add_to_watchlist(self, user_id: str, product_url: str, product_data: Dict) -> bool:
         try:
+            target_price = product_data.get("target_price")
             self.db.collection("watchlists").add({
                 "user_id": user_id,
                 "product_url": product_url,
                 "product_data": product_data,
                 "added_at": datetime.now(),
-                "target_price": None
+                "target_price": target_price
             })
             logger.info(f"Product added to watchlist for user {user_id}")
             return True
         except Exception as e:
             logger.error(f"Error adding to watchlist: {e}")
+            return False
+
+    def update_product_price(self, doc_id: str, new_price: float) -> bool:
+        try:
+            doc_ref = self.db.collection("watchlists").document(doc_id)
+            doc = doc_ref.get()
+            if doc.exists:
+                data = doc.to_dict()
+                product_data = data.get("product_data", {})
+                product_data["price"] = new_price
+                doc_ref.update({
+                    "product_data": product_data,
+                    "updated_at": datetime.now()
+                })
+                self.add_price_history(data.get("product_url"), new_price)
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error updating product price: {e}")
             return False
     
     def get_watchlist(self, user_id: str) -> List[Dict]:

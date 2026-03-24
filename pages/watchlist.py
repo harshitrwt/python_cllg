@@ -7,9 +7,9 @@ import pandas as pd
 from database.firebase_db import FirebaseDB
 from scrapers.amazon_scraper import AmazonScraper
 from scrapers.flipkart_scraper import FlipkartScraper
+from utils.ui_utils import set_page_theme
 
 def init_db():
-    """Ensure database and scrapers are initialized"""
     if "db" not in st.session_state:
         try:
             st.session_state.db = FirebaseDB()
@@ -23,7 +23,7 @@ def init_db():
         st.session_state.flipkart_scraper = FlipkartScraper()
 
 def show_watchlist():
-    """Display watchlist page"""
+    set_page_theme()
     init_db()
     st.title("📌 My Watchlist")
     
@@ -81,7 +81,7 @@ def show_watchlist():
                 with p_col2:
                     final_title = st.text_input("Product Name", value=data.get("title", ""))
                     current_price = st.number_input("Current Price (₹)", value=float(data.get("price", 1.0)))
-                    target_price = st.number_input("Set your Target Price (₹)", min_value=1.0, value=current_price * 0.9 if current_price > 0 else 0.0)
+                    target_price = st.number_input("Set your Target Price (₹)", min_value=1.0, value=current_price * 1.0 if current_price > 0 else 1.0)
                     
                     if current_price > 0 and target_price < current_price * 0.5:
                         st.warning("⚠️ Target is >50% lower than current price. Might take a long time!")

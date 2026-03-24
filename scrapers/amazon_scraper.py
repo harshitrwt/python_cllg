@@ -2,32 +2,39 @@ from bs4 import BeautifulSoup
 import requests
 import re
 import logging
-from config import REQUEST_TIMEOUT, USER_AGENT
+import time
+import random
+from config import REQUEST_TIMEOUT
+from utils.user_agents import get_headers
 
 logger = logging.getLogger(__name__)
 
 class AmazonScraper:
     def __init__(self):
-        self.headers = {
-            "User-Agent": USER_AGENT,
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-            "Referer": "https://www.google.com/",
-            "Connection": "keep-alive"
-        }
+        self.session = requests.Session()
     
     def scrape_product(self, url: str) -> dict:
         try:
             if not self.validate_url(url):
                 return {"error": "Invalid Amazon product URL", "url": url, "platform": "amazon"}
 
-            response = requests.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT)
-            response.raise_for_status()
+            for attempt in range(2):
+                headers = get_headers()
+                time.sleep(random.uniform(1.0, 3.0))
+                
+                response = self.session.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
+                
+                if response.status_code == 200:
+                    if "captcha" in response.text.lower() or "api-services-support@amazon.com" in response.text.lower():
+                        logger.warning(f"Amazon block detected on attempt {attempt+1}")
+                        continue
+                    break
+                else:
+                    logger.error(f"HTTP {response.status_code} on attempt {attempt+1}")
+                    continue
             
-            if "captcha" in response.text.lower() or "api-services-support@amazon.com" in response.text.lower():
-                logger.warning(f"Amazon blocked the request for {url}")
-                return {"error": "Amazon blocked the request. Try again later or use a proxy.", "url": url, "platform": "amazon"}
+            if response.status_code != 200 or "captcha" in response.text.lower():
+                 return {"error": "Amazon blocked the request. Try again later.", "url": url, "platform": "amazon"}
 
             soup = BeautifulSoup(response.content, 'lxml')
             

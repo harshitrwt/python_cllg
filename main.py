@@ -19,64 +19,9 @@ st.set_page_config(
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-    
-    html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif;
-    }
-    
-    .main {
-        background-color: #f8f9fa;
-    }
-    
-    .stButton>button {
-        border-radius: 8px;
-        font-weight: 600;
-        transition: all 0.3s;
-    }
-    
-    .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-    
-    .product-card {
-        background-color: white;
-        padding: 20px;
-        border-radius: 12px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        margin-bottom: 20px;
-        border-left: 5px solid #007bff;
-    }
-    
-    .price-tag {
-        font-size: 24px;
-        font-weight: 700;
-        color: #28a745;
-    }
-    
-    .platform-badge {
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 12px;
-        font-weight: bold;
-        text-transform: uppercase;
-    }
-    
-    .amazon-badge { background-color: #FF9900; color: white; }
-    .flipkart-badge { background-color: #2874F0; color: white; }
-    
-    .sidebar-stats {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 15px;
-        border-radius: 10px;
-        margin-bottom: 20px;
-    }
-</style>
-""", unsafe_allow_html=True)
+from utils.ui_utils import set_page_theme
+
+set_page_theme()
 
 if "user_logged_in" not in st.session_state:
     st.session_state.user_logged_in = False
@@ -101,16 +46,16 @@ flipkart_scraper = FlipkartScraper()
 def show_login_page():
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
-        st.markdown("<h1 style='text-align: center; color: #1f2937;'>🛍️ SmartPriceWatcher AI</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: #6b7280; font-size: 1.1rem;'>The next generation of intelligent price tracking</p>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center; color: #f8fafc;'>🛍️ SmartPriceWatcher AI</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 1.1rem;'>The next generation of intelligent price tracking</p>", unsafe_allow_html=True)
         
         tab1, tab2 = st.tabs(["🔒 Secure Login", "✨ Create Account"])
         
         with tab1:
             with st.form("login_form"):
-                email = st.text_input("Email Domain")
+                email = st.text_input("Email/User ID")
                 password = st.text_input("Password", type="password")
-                submit = st.form_submit_button("Sign In", use_container_width=True)
+                submit = st.form_submit_button("Sign In")
                 
                 if submit:
                     if email and password:
@@ -128,10 +73,10 @@ def show_login_page():
                         
         with tab2:
             with st.form("signup_form"):
-                new_email = st.text_input("New Email Domain")
+                new_email = st.text_input("Choose User ID")
                 new_pass = st.text_input("Create Password", type="password")
                 confirm_pass = st.text_input("Confirm Password", type="password")
-                signup_submit = st.form_submit_button("Join Now", use_container_width=True)
+                signup_submit = st.form_submit_button("Join Now")
                 
                 if signup_submit:
                     if new_email and new_pass == confirm_pass:
@@ -155,29 +100,53 @@ def show_dashboard():
     total_savings = 0.0
     best_drop = 0.0
     best_product = "N/A"
+    triggered_alerts = []
     
     for item in watchlist:
+        data = item['product_data']
         history = db.get_price_history(item['product_url'])
+        target = item.get('target_price')
+        
+        if target and data['price'] <= target:
+            triggered_alerts.append(item)
+            
         if history and len(history) > 1:
             max_price = max([h['price'] for h in history])
-            current_price = item['product_data']['price']
+            current_price = data['price']
             drop = max_price - current_price
             if drop > 0:
                 total_savings += drop
                 drop_pct = (drop / max_price) * 100
                 if drop_pct > best_drop:
                     best_drop = drop_pct
-                    best_product = item['product_data']['title'][:15] + "..."
+                    best_product = data['title'][:15] + "..."
 
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         st.metric("Tracking", len(watchlist))
     with c2:
-        st.metric("Active Alerts", len([i for i in watchlist if i.get('target_price')]), f"{len(watchlist)} monitored")
+        st.metric("Deals Found", len(triggered_alerts), f"{len(watchlist)} total items")
     with c3:
         st.metric("Best Drop", f"{best_drop:.1f}%" if best_drop > 0 else "0%", best_product)
     with c4:
-        st.metric("Total Opportunity", f"₹{total_savings:,.2f}", "Potential Savings")
+        st.metric("Opportunity", f"₹{total_savings:,.2f}", "Current Savings")
+
+    if triggered_alerts:
+        for alert in triggered_alerts:
+            st.toast(f"🎉 Target reached for {alert['product_data']['title'][:30]}!", icon="🔥")
+            st.success(f"🎯 **TARGET REACHED!** {alert['product_data']['title']} is now ₹{alert['product_data']['price']:,.2f} (Target: ₹{alert['target_price']:,.2f})")
+
+    if st.button("🔄 Sync Live Prices", use_container_width=True):
+        with st.spinner("Checking Amazon & Flipkart for changes..."):
+            for item in watchlist:
+                url = item['product_url']
+                scraper = amazon_scraper if "amazon" in url.lower() else flipkart_scraper
+                new_data = scraper.scrape_product(url)
+                if new_data.get("success"):
+                    db.update_product_price(item['id'], new_data['price'])
+            st.success("Prices updated! Screen refreshing...")
+            time.sleep(1)
+            st.rerun()
 
     st.divider()
     
@@ -234,6 +203,8 @@ def show_watchlist():
                     if scraper:
                         product_data = scraper.scrape_product(url)
                         if product_data.get("success"):
+                            if target_price > 0:
+                                product_data["target_price"] = target_price
                             res = db.add_to_watchlist(st.session_state.current_user, url, product_data)
                             if res:
                                 db.add_price_history(url, product_data['price'])
@@ -280,6 +251,9 @@ def show_watchlist():
                     st.markdown(f"**{data['title']}**")
                     st.markdown(f"<span class='platform-badge {data['platform']}-badge'>{data['platform']}</span>{change_text}", unsafe_allow_html=True)
                     st.write(f"Current Price: **{format_price(data['price'])}**")
+                    target = item.get('target_price', 0.0)
+                    if target:
+                        st.write(f"Target Price: **₹{target:,.2f}**")
                     
                     if st.button("🤖 Get AI Insight", key=f"ai_{item['id']}"):
                         with st.spinner("AI analysis in progress..."):
@@ -355,17 +329,17 @@ def main():
         with st.sidebar:
             st.markdown(f"""
             <div class="sidebar-stats">
-                <small>Welcome back,</small>
-                <h3>{st.session_state.current_user.split('@')[0].capitalize()}</h3>
+                <p style="margin:0; font-size: 0.8rem; opacity: 0.8;">Welcome back,</p>
+                <h2 style="margin:0; font-size: 1.5rem;">{st.session_state.current_user.split('@')[0].capitalize()}</h2>
             </div>
             """, unsafe_allow_html=True)
             
             nav = st.radio("Navigation", ["Dashboard", "Watchlist", "AI Assistant", "Settings"], label_visibility="collapsed")
             
             st.divider()
-            st.markdown("### 🔌 API Status")
-            st.success("Firebase: Connected")
-            st.success("Groq AI: Online")
+            st.markdown("### 🚦 System Status")
+            st.success("Firebase Backend")
+            st.success("Groq Intelligence")
             
         if nav == "Dashboard": show_dashboard()
         elif nav == "Watchlist": show_watchlist()

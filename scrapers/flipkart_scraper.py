@@ -2,27 +2,26 @@ from bs4 import BeautifulSoup
 import requests
 import re
 import logging
-from config import REQUEST_TIMEOUT, USER_AGENT
+import time
+import random
+from config import REQUEST_TIMEOUT
+from utils.user_agents import get_headers
 
 logger = logging.getLogger(__name__)
 
 class FlipkartScraper:
     def __init__(self):
-        self.headers = {
-            "User-Agent": USER_AGENT,
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-            "Referer": "https://www.google.com/",
-            "Connection": "keep-alive"
-        }
+        self.session = requests.Session()
     
     def scrape_product(self, url: str) -> dict:
         try:
             if not self.validate_url(url):
                 return {"error": "Invalid Flipkart product URL", "url": url, "platform": "flipkart"}
 
-            response = requests.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT)
+            headers = get_headers()
+            time.sleep(random.uniform(1.0, 2.5))
+            
+            response = self.session.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
             response.raise_for_status()
             
             soup = BeautifulSoup(response.content, 'lxml')
@@ -33,6 +32,7 @@ class FlipkartScraper:
                 ("h1", {"class": "yhB1nd"}),
                 ("span", {"class": "_35Ky9a"}),
                 ("span", {"class": "VU-Z7M"}),
+                ("span", {"class": "m_1WcE"}),
             ]
             
             for tag, attrs in title_selectors:
@@ -56,7 +56,8 @@ class FlipkartScraper:
                 ("div", {"class": "_30jeq3"}),
                 ("div", {"class": "Nx9bqj _4b5DiR"}),
                 ("div", {"class": "Nx9bqj"}),
-                ("div", {"class": "_16J6S6"})
+                ("div", {"class": "_16J6S6"}),
+                ("div", {"class": "fP6977"})
             ]
             
             for tag, attrs in price_selectors:
@@ -77,6 +78,7 @@ class FlipkartScraper:
                 ("img", {"class": "j-f872"}),
                 ("img", {"class": "_30XB9F"}),
                 ("img", {"class": "_2r_T1_"}),
+                ("img", {"class": "DByo9Z"})
             ]
             
             for tag, attrs in image_selectors:
@@ -121,6 +123,6 @@ class FlipkartScraper:
             }
     
     def validate_url(self, url: str) -> bool:
-        return "flipkart" in url.lower() and "/p/" in url.lower()
+        return "flipkart" in url.lower() and ("/p/" in url.lower() or "/itm" in url.lower())
 
 

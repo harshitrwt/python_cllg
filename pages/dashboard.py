@@ -1,12 +1,7 @@
-"""
-Dashboard page - Main overview of user's price tracking (Connected to Firebase)
-"""
-
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
-from datetime import datetime
 from database.firebase_db import FirebaseDB
+from utils.ui_utils import set_page_theme
 
 def init_db():
     if "db" not in st.session_state:
@@ -17,7 +12,7 @@ def init_db():
             st.stop()
 
 def show_dashboard():
-    """Display dashboard page"""
+    set_page_theme()
     init_db()
     st.title("📊 Dashboard")
     

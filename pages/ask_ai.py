@@ -1,5 +1,6 @@
 import streamlit as st
 from database.firebase_db import FirebaseDB
+from utils.ui_utils import set_page_theme
 
 def init_db():
     if "db" not in st.session_state:
@@ -10,7 +11,7 @@ def init_db():
             st.stop()
 
 def show_ai_assistant():
-    """Display AI assistant page"""
+    set_page_theme()
     init_db()
     st.title("🤖 AI Price Assistant")
     
