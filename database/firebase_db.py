@@ -7,15 +7,12 @@ from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-
 class FirebaseDB:
     def __init__(self):
-        """Initialize Firebase connection"""
         self.db = None
         self.init_firebase()
     
     def init_firebase(self):
-        """Initialize Firebase Admin SDK"""
         try:
             if not firebase_admin._apps:
                 if FIREBASE_CREDENTIALS_PATH:
@@ -31,7 +28,6 @@ class FirebaseDB:
             raise
     
     def add_user(self, user_id: str, user_data: Dict) -> bool:
-        """Add a new user (user_id is the email)"""
         try:
             self.db.collection("users").document(user_id).set({
                 **user_data,
@@ -45,7 +41,6 @@ class FirebaseDB:
             return False
     
     def get_user(self, user_id: str) -> Optional[Dict]:
-        """Get user data by email"""
         try:
             doc = self.db.collection("users").document(user_id).get()
             if doc.exists:
@@ -56,7 +51,6 @@ class FirebaseDB:
             return None
     
     def add_to_watchlist(self, user_id: str, product_url: str, product_data: Dict) -> bool:
-        """Add product to user's watchlist"""
         try:
             self.db.collection("watchlists").add({
                 "user_id": user_id,
@@ -72,13 +66,13 @@ class FirebaseDB:
             return False
     
     def get_watchlist(self, user_id: str) -> List[Dict]:
-        """Get user's watchlist with document IDs"""
         try:
-            docs = self.db.collection("watchlists").where("user_id", "==", user_id).stream()
+            from google.cloud.firestore_v1.base_query import FieldFilter
+            docs = self.db.collection("watchlists").where(filter=FieldFilter("user_id", "==", user_id)).stream()
             watchlist = []
             for doc in docs:
                 data = doc.to_dict()
-                data["id"] = doc.id # Include document ID for deletion
+                data["id"] = doc.id
                 watchlist.append(data)
             logger.info(f"Fetched {len(watchlist)} watchlist items for {user_id}")
             return watchlist
@@ -87,7 +81,6 @@ class FirebaseDB:
             return []
     
     def remove_from_watchlist(self, doc_id: str) -> bool:
-        """Remove product from watchlist"""
         try:
             self.db.collection("watchlists").document(doc_id).delete()
             logger.info(f"Product removed from watchlist: {doc_id}")
@@ -97,7 +90,6 @@ class FirebaseDB:
             return False
     
     def add_price_history(self, product_url: str, price: float, timestamp: datetime = None) -> bool:
-        """Record price history for a product"""
         try:
             self.db.collection("price_history").add({
                 "product_url": product_url,
@@ -111,10 +103,10 @@ class FirebaseDB:
             return False
     
     def get_price_history(self, product_url: str, limit: int = 50) -> List[Dict]:
-        """Get price history for a product"""
         try:
+            from google.cloud.firestore_v1.base_query import FieldFilter
             docs = self.db.collection("price_history")\
-                .where("product_url", "==", product_url)\
+                .where(filter=FieldFilter("product_url", "==", product_url))\
                 .order_by("timestamp", direction=firestore.Query.DESCENDING)\
                 .limit(limit)\
                 .stream()
@@ -126,7 +118,6 @@ class FirebaseDB:
             return []
     
     def create_alert(self, user_id: str, product_url: str, target_price: float) -> bool:
-        """Create a price alert for user"""
         try:
             self.db.collection("alerts").add({
                 "user_id": user_id,
@@ -142,11 +133,12 @@ class FirebaseDB:
             return False
     
     def get_user_alerts(self, user_id: str) -> List[Dict]:
-        """Get all alerts for a user"""
         try:
-            docs = self.db.collection("alerts").where("user_id", "==", user_id).stream()
+            from google.cloud.firestore_v1.base_query import FieldFilter
+            docs = self.db.collection("alerts").where(filter=FieldFilter("user_id", "==", user_id)).stream()
             alerts = [doc.to_dict() for doc in docs]
             return alerts
         except Exception as e:
             logger.error(f"Error fetching alerts: {e}")
             return []
+

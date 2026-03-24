@@ -80,7 +80,7 @@ def show_watchlist():
                 
                 with p_col2:
                     final_title = st.text_input("Product Name", value=data.get("title", ""))
-                    current_price = st.number_input("Current Price (₹)", value=float(data.get("price", 0.0)))
+                    current_price = st.number_input("Current Price (₹)", value=float(data.get("price", 1.0)))
                     target_price = st.number_input("Set your Target Price (₹)", min_value=1.0, value=current_price * 0.9 if current_price > 0 else 0.0)
                     
                     if current_price > 0 and target_price < current_price * 0.5:

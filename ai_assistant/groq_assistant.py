@@ -2,151 +2,130 @@ from groq import Groq
 import logging
 from config import GROQ_API_KEY, GROQ_MODEL
 from typing import List, Dict
+import json
 
 logger = logging.getLogger(__name__)
 
-
 class GroqAssistant:
     def __init__(self):
-        """Initialize Groq client"""
-        self.client = Groq(api_key=GROQ_API_KEY)
+        self.client = None
         self.model = GROQ_MODEL
-        self.conversation_history = []
-    
-    def get_price_insights(self, product_name: str, price_history: List[Dict]) -> str:
-        """
-        Get AI insights about product price trends
-        
-        Args:
-            product_name: Name of the product
-            price_history: List of historical prices with timestamps
-            
-        Returns:
-            AI-generated insight about the price trend
-        """
+        self.conversation_history = [
+            {"role": "system", "content": "You are SmartPriceWatcher AI, a premium shopping consultant. You help users make informed buying decisions by analyzing price trends, comparing products across platforms like Amazon and Flipkart, and providing expert advice. Your tone is professional, helpful, and data-driven."}
+        ]
         try:
-            # Format price history for context
+            if GROQ_API_KEY:
+                self.client = Groq(api_key=GROQ_API_KEY)
+        except Exception as e:
+            logger.error(f"Failed to initialize Groq client: {e}")
+            self.client = None
+    
+    def get_price_insights(self, product_data: Dict, price_history: List[Dict]) -> str:
+        if not self.client:
+            return "AI Insights are currently unavailable due to a technical issue. Please check your API key or connection."
+        try:
+            product_name = product_data.get('title', 'this product')
+            current_price = product_data.get('price', 0)
             price_context = self._format_price_context(price_history)
-            
             prompt = f"""
-            Analyze the price history for '{product_name}' and provide insights:
-            
-            Price History:
+            Analyze the price history for the product: "{product_name}"
+            Current Price: ₹{current_price:,.2f}
+            Historical Price Data:
             {price_context}
-            
-            Please provide:
-            1. Current trend (increasing/decreasing/stable)
-            2. Best time to buy recommendation
-            3. Average price
-            4. Price volatility assessment
+            Based on this data, please provide a detailed analysis:
+            1. **Price Trajectory**: Is the price currently at a peak, a valley, or a stable plateau?
+            2. **Buy/Wait Recommendation**: Provide a clear recommendation (Buy Now, Wait for Drop, or Watch Closely) with reasoning.
+            3. **Value Assessment**: How does the current price compare to the historical average (₹{self._calculate_avg(price_history):,.2f})?
+            4. **Predicted Next Move**: Based on the pattern, what is the likely short-term price movement?
+            Use markdown formatting for a professional look.
             """
-            
-            response = self.client.messages.create(
-                model=self.model,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=500
-            )
-            
-            insight = response.choices[0].message.content
-            logger.info(f"Generated insight for {product_name}")
-            return insight
-            
-        except Exception as e:
-            logger.error(f"Error generating insights: {e}")
-            return "Unable to generate insights at the moment."
-    
-    def ask_question(self, question: str, context: str = "") -> str:
-        """
-        Ask the AI assistant a question with optional context
-        
-        Args:
-            question: User's question
-            context: Additional context about products/prices
-            
-        Returns:
-            AI response
-        """
-        try:
-            # Add to conversation history
-            self.conversation_history.append({"role": "user", "content": question})
-            
-            
-            messages = self.conversation_history.copy()
-            
-            if context:
-                messages[0] = {
-                    "role": "system",
-                    "content": f"You are a helpful price tracking assistant. Context: {context}"
-                }
-            
-            response = self.client.messages.create(
-                model=self.model,
-                messages=messages,
-                max_tokens=500
-            )
-            
-            answer = response.choices[0].message.content
-            
-            # Add to history
-            self.conversation_history.append({"role": "assistant", "content": answer})
-            
-            logger.info("Question answered successfully")
-            return answer
-            
-        except Exception as e:
-            logger.error(f"Error answering question: {e}")
-            return "I couldn't process that question. Please try again."
-    
-    def find_best_deal(self, products: List[Dict]) -> str:
-        """Find the best deal among products"""
-        try:
-            product_context = self._format_products(products)
-            
-            prompt = f"""
-            Compare these products and find the best deal:
-            
-            {product_context}
-            
-            Provide a recommendation on which product offers the best value.
-            """
-            
-            response = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=500
+                max_tokens=800,
+                temperature=0.3
             )
-            
-            recommendation = response.choices[0].message.content
-            logger.info("Generated product recommendation")
-            return recommendation
-            
+            return response.choices[0].message.content
+        except Exception as e:
+            logger.error(f"Error generating insights: {e}")
+            return "I analyzed the price trends but encountered an error generating the report."
+    
+    def find_best_deal(self, products: List[Dict]) -> str:
+        if not self.client:
+            return "Dealer identification AI is currently offline. You can manually compare prices in your dashboard."
+        try:
+            if not products:
+                return "You haven't added any products to compare yet."
+            product_context = self._format_products(products)
+            prompt = f"""
+            I need you to act as a value-focused shopping expert. Compare the following products from the user's watchlist and identify the BEST DEAL.
+            Products under consideration:
+            {product_context}
+            Criteria for your recommendation:
+            - Best price-to-feature ratio.
+            - Platform reliability (Amazon vs Flipkart).
+            - Current discounts or price drops.
+            Format your response as a "Deal of the Day" recommendation with:
+            1. **The Winner**: Clearly state which product is the best deal.
+            2. **Why it wins**: 3 bullet points explaining the value.
+            3. **Alternative**: A 'Runner-up' if the first choice doesn't suit some users.
+            4. **Buying Tip**: A pro-tip for this specific category of products.
+            Use emojis to make it engaging!
+            """
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=1000,
+                temperature=0.5
+            )
+            return response.choices[0].message.content
         except Exception as e:
             logger.error(f"Error finding best deal: {e}")
-            return "Unable to find best deal at the moment."
+            return "I couldn't compare the deals right now."
     
-    def clear_history(self):
-        """Clear conversation history"""
-        self.conversation_history = []
-    
-    @staticmethod
-    def _format_price_context(price_history: List[Dict]) -> str:
-        """Format price history for display"""
-        context = ""
-        for entry in price_history[:10]: 
-            price = entry.get("price", "N/A")
-            timestamp = entry.get("timestamp", "N/A")
-            context += f"- Price: {price}, Date: {timestamp}\n"
-        return context
-    
-    @staticmethod
-    def _format_products(products: List[Dict]) -> str:
-        """Format products for comparison"""
-        context = ""
-        for i, product in enumerate(products, 1):
-            context += f"\n{i}. {product.get('title', 'Unknown')}\n"
-            context += f"   - Price: {product.get('price', 'N/A')}\n"
-            context += f"   - Platform: {product.get('platform', 'N/A')}\n"
-            context += f"   - Rating: {product.get('rating', 'N/A')}\n"
-        return context
+    def ask_ai(self, question: str, watchlist_context: List[Dict] = None) -> str:
+        if not self.client:
+            return "AI Chat Assistant is currently offline. You can still track prices and manage your watchlist!"
+        try:
+            messages = self.conversation_history.copy()
+            if watchlist_context:
+                context_str = self._format_products(watchlist_context)
+                messages.append({
+                    "role": "system", 
+                    "content": f"The user currently has these products in their watchlist: {context_str}"
+                })
+            messages.append({"role": "user", "content": question})
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                max_tokens=1000,
+                temperature=0.7
+            )
+            answer = response.choices[0].message.content
+            self.conversation_history.append({"role": "user", "content": question})
+            self.conversation_history.append({"role": "assistant", "content": answer})
+            if len(self.conversation_history) > 11:
+                self.conversation_history = [self.conversation_history[0]] + self.conversation_history[-10:]
+            return answer
+        except Exception as e:
+            logger.error(f"AI Assistant error: {e}")
+            return "I'm having trouble thinking right now. Please try again in a moment."
+
+    def _format_price_context(self, history: List[Dict]) -> str:
+        if not history: return "No historical data available."
+        return "\n".join([f"- {h.get('timestamp')}: ₹{h.get('price', 0):,.2f}" for h in history[:15]])
+
+    def _calculate_avg(self, history: List[Dict]) -> float:
+        if not history: return 0.0
+        prices = [h.get('price', 0) for h in history if h.get('price', 0) > 0]
+        return sum(prices) / len(prices) if prices else 0.0
+
+    def _format_products(self, products: List[Dict]) -> str:
+        formatted = ""
+        for i, p in enumerate(products, 1):
+            data = p.get('product_data', {})
+            formatted += f"\n{i}. {data.get('title')} ({data.get('platform', 'unknown')})\n"
+            formatted += f"   - Price: ₹{data.get('price', 0):,.2f}\n"
+            if data.get('description'):
+                formatted += f"   - Details: {data.get('description')[:150]}...\n"
+        return formatted

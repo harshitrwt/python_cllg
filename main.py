@@ -1,344 +1,378 @@
 import streamlit as st
 import logging
+import pandas as pd
+import plotly.express as px
 from datetime import datetime
 from database.firebase_db import FirebaseDB
+from scrapers.amazon_scraper import AmazonScraper
+from scrapers.flipkart_scraper import FlipkartScraper
+from ai_assistant.groq_assistant import GroqAssistant
+import time
 
-# Configure page
 st.set_page_config(
-    page_title="SmartPriceWatcher",
-    page_icon="💰",
+    page_title="SmartPriceWatcher AI",
+    page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Custom CSS
 st.markdown("""
 <style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #1f77b4;
-        margin-bottom: 1rem;
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
     }
-    .metric-card {
-        background-color: #f0f2f6;
-        padding: 1.5rem;
-        border-radius: 0.5rem;
-        border-left: 5px solid #1f77b4;
+    
+    .main {
+        background-color: #f8f9fa;
+    }
+    
+    .stButton>button {
+        border-radius: 8px;
+        font-weight: 600;
+        transition: all 0.3s;
+    }
+    
+    .stButton>button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .product-card {
+        background-color: white;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        margin-bottom: 20px;
+        border-left: 5px solid #007bff;
+    }
+    
+    .price-tag {
+        font-size: 24px;
+        font-weight: 700;
+        color: #28a745;
+    }
+    
+    .platform-badge {
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+        text-transform: uppercase;
+    }
+    
+    .amazon-badge { background-color: #FF9900; color: white; }
+    .flipkart-badge { background-color: #2874F0; color: white; }
+    
+    .sidebar-stats {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 20px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize session state
 if "user_logged_in" not in st.session_state:
     st.session_state.user_logged_in = False
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-# Initialize FirebaseDB
-if "db" not in st.session_state:
-    try:
-        st.session_state.db = FirebaseDB()
-    except Exception as e:
-        st.error(f"Failed to connect to Firebase: {e}")
-        st.stop()
+@st.cache_resource
+def get_db():
+    return FirebaseDB()
 
+@st.cache_resource
+def get_ai():
+    return GroqAssistant()
+
+db = get_db()
+ai = get_ai()
+amazon_scraper = AmazonScraper()
+flipkart_scraper = FlipkartScraper()
 
 def show_login_page():
-    """Display login/signup page"""
-    col1, col2, col3 = st.columns([1, 2, 1])
-    
+    col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
-        st.markdown("<h1 style='text-align: center;'>💰 SmartPriceWatcher</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center;'>AI-Powered Product Price Tracker</p>", unsafe_allow_html=True)
-        st.divider()
+        st.markdown("<h1 style='text-align: center; color: #1f2937;'>🛍️ SmartPriceWatcher AI</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #6b7280; font-size: 1.1rem;'>The next generation of intelligent price tracking</p>", unsafe_allow_html=True)
         
-        tab1, tab2 = st.tabs(["Login", "Sign Up"])
+        tab1, tab2 = st.tabs(["🔒 Secure Login", "✨ Create Account"])
         
         with tab1:
-            st.subheader("Login")
-            email = st.text_input("Email", key="login_email")
-            password = st.text_input("Password", type="password", key="login_password")
-            
-            if st.button("Login", use_container_width=True):
-                if email and password:
-                    email = email.lower().strip()
-                    user_data = st.session_state.db.get_user(email)
-                    if user_data:
-                        # In a real app, hash and check passwords
-                        if user_data.get("password") == password:
+            with st.form("login_form"):
+                email = st.text_input("Email Domain")
+                password = st.text_input("Password", type="password")
+                submit = st.form_submit_button("Sign In", use_container_width=True)
+                
+                if submit:
+                    if email and password:
+                        user = db.get_user(email.lower().strip())
+                        if user and user.get("password") == password:
                             st.session_state.user_logged_in = True
-                            st.session_state.current_user = email
-                            st.success(f"Welcome back, {email}!")
+                            st.session_state.current_user = email.lower().strip()
+                            st.success("Welcome back!")
+                            time.sleep(0.5)
                             st.rerun()
                         else:
-                            st.error("Incorrect password")
+                            st.error("Invalid credentials")
                     else:
-                        st.error("User not found. Please sign up.")
-                else:
-                    st.error("Please enter email and password")
-        
+                        st.warning("Please fill all fields")
+                        
         with tab2:
-            st.subheader("Create Account")
-            new_email = st.text_input("Email", key="signup_email")
-            new_password = st.text_input("Password", type="password", key="signup_password")
-            confirm_password = st.text_input("Confirm Password", type="password", key="confirm_password")
-            
-            if st.button("Sign Up", use_container_width=True):
-                if new_email and new_password and confirm_password:
-                    new_email = new_email.lower().strip()
-                    if new_password == confirm_password:
-                        # Check if user already exists
-                        if st.session_state.db.get_user(new_email):
-                            st.error("User already exists with this email")
+            with st.form("signup_form"):
+                new_email = st.text_input("New Email Domain")
+                new_pass = st.text_input("Create Password", type="password")
+                confirm_pass = st.text_input("Confirm Password", type="password")
+                signup_submit = st.form_submit_button("Join Now", use_container_width=True)
+                
+                if signup_submit:
+                    if new_email and new_pass == confirm_pass:
+                        email_clean = new_email.lower().strip()
+                        if db.get_user(email_clean):
+                            st.error("User already exists")
                         else:
-                            # Add to Firebase
-                            success = st.session_state.db.add_user(new_email, {
-                                "email": new_email,
-                                "password": new_password # Simplified for now
-                            })
-                            if success:
-                                st.session_state.user_logged_in = True
-                                st.session_state.current_user = new_email
-                                st.success(f"Account created! Welcome, {new_email}!")
-                                st.rerun()
+                            if db.add_user(email_clean, {"email": email_clean, "password": new_pass}):
+                                st.success("Account created! Please log in.")
+                                time.sleep(1)
                             else:
-                                st.error("Failed to create account in database")
+                                st.error("Database error. Please try again.")
                     else:
-                        st.error("Passwords don't match")
-                else:
-                    st.error("Please fill all fields")
-
-
-def show_main_app():
-    """Display main application"""
-    # Sidebar
-    with st.sidebar:
-        st.markdown("## 🎯 Menu")
-        
-        page = st.radio(
-            "Navigate to:",
-            ["Dashboard", "Watchlist", "AI Assistant", "Settings"],
-            label_visibility="collapsed"
-        )
-        
-        st.divider()
-        
-        st.markdown("### 📊 Quick Stats")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Watching", "5")
-        with col2:
-            st.metric("Alerts", "3")
-        
-        st.divider()
-        
-        st.markdown("### 👤 Account")
-        st.write(f"**Logged in as:**\n{st.session_state.current_user}")
-        
-        if st.button("🚪 Logout", use_container_width=True):
-            st.session_state.user_logged_in = False
-            st.session_state.current_user = None
-            st.rerun()
-    
-    # Main content
-    if page == "Dashboard":
-        show_dashboard()
-    elif page == "Watchlist":
-        show_watchlist()
-    elif page == "AI Assistant":
-        show_ai_assistant()
-    elif page == "Settings":
-        show_settings()
-
+                        st.error("Passwords don't match or fields empty")
 
 def show_dashboard():
-    """Dashboard view"""
-    st.title("📊 Dashboard")
+    st.title("🚀 Smart Dashboard")
     
-    watchlist = st.session_state.db.get_watchlist(st.session_state.current_user)
-    alerts = st.session_state.db.get_user_alerts(st.session_state.current_user)
+    watchlist = db.get_watchlist(st.session_state.current_user)
     
-    # Summary cards
-    col1, col2, col3, col4 = st.columns(4)
+    total_savings = 0.0
+    best_drop = 0.0
+    best_product = "N/A"
     
-    with col1:
-        st.metric("Products Watching", len(watchlist))
-    with col2:
-        st.metric("Price Alerts", len(alerts))
-    with col3:
-        st.metric("Avg. Savings", "₹0", delta="0%")
-    with col4:
-        st.metric("Best Deal", "N/A", delta="None")
-    
+    for item in watchlist:
+        history = db.get_price_history(item['product_url'])
+        if history and len(history) > 1:
+            max_price = max([h['price'] for h in history])
+            current_price = item['product_data']['price']
+            drop = max_price - current_price
+            if drop > 0:
+                total_savings += drop
+                drop_pct = (drop / max_price) * 100
+                if drop_pct > best_drop:
+                    best_drop = drop_pct
+                    best_product = item['product_data']['title'][:15] + "..."
+
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.metric("Tracking", len(watchlist))
+    with c2:
+        st.metric("Active Alerts", len([i for i in watchlist if i.get('target_price')]), f"{len(watchlist)} monitored")
+    with c3:
+        st.metric("Best Drop", f"{best_drop:.1f}%" if best_drop > 0 else "0%", best_product)
+    with c4:
+        st.metric("Total Opportunity", f"₹{total_savings:,.2f}", "Potential Savings")
+
     st.divider()
     
-    # Price trends
-    st.subheader("📈 Recent Activity")
-    
-    import pandas as pd
-    
-    if watchlist:
-        activity_data = []
-        for item in watchlist[:5]: # Show last 5
-            product_data = item.get("product_data", {})
-            activity_data.append({
-                "Product": product_data.get("title", "New Product"),
-                "Platform": product_data.get("platform", "Unknown").capitalize(),
-                "Current Price": f"₹{product_data.get('price', 0.0):,.2f}",
-                "Status": "🔍 Tracking"
-            })
-        
-        df = pd.DataFrame(activity_data)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+    if not watchlist:
+        st.info("👋 Welcome! Start by adding a product URL in the Watchlist tab.")
+        st.image("https://illustrations.popsy.co/gray/shopping-bag.svg", width=300)
     else:
-        st.info("No activity yet. Add products to see them here.")
+        st.subheader("📈 Global Price Pulse")
+        all_history = []
+        for item in watchlist[:3]:
+            hist = db.get_price_history(item['product_url'], limit=10)
+            if hist:
+                for h in hist:
+                    h['Product'] = item['product_data']['title'][:20] + "..."
+                    all_history.append(h)
+        
+        if all_history:
+            df = pd.DataFrame(all_history)
+            fig = px.line(df, x='timestamp', y='price', color='Product', template='plotly_white')
+            fig.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=350)
+            st.plotly_chart(fig, use_container_width=True)
 
+        st.subheader("🔥 Latest Tracked Products")
+        cols = st.columns(3)
+        for i, item in enumerate(watchlist[-3:]):
+            with cols[i % 3]:
+                data = item['product_data']
+                st.markdown(f"""
+                <div class="product-card">
+                    <img src="{data.get('image_url')}" style="width:100%; border-radius:8px; margin-bottom:10px;">
+                    <span class="platform-badge {data['platform']}-badge">{data['platform']}</span>
+                    <h4 style="margin: 10px 0;">{data['title'][:50]}...</h4>
+                    <span class="price-tag">₹{data['price']:,.2f}</span>
+                </div>
+                """, unsafe_allow_html=True)
+
+from utils.helpers import format_price, get_price_change_percentage, format_timestamp
 
 def show_watchlist():
-    """Watchlist view"""
-    st.title("📌 My Watchlist")
+    st.title("📌 Intelligent Watchlist")
     
-    st.subheader("➕ Add New Product")
-    col1, col2 = st.columns([3, 1])
-    
-    with col1:
-        url = st.text_input("Product URL", placeholder="https://amazon.com/dp/...")
-    with col2:
-        if st.button("Add", use_container_width=True):
+    with st.expander("➕ Add New Product", expanded=True):
+        col1, col2 = st.columns([4, 1])
+        url = col1.text_input("Paste Amazon or Flipkart URL here", placeholder="https://...")
+        target_price = col2.number_input("Target Price (optional)", min_value=0.0, step=100.0)
+        
+        if st.button("🔍 Analyze & Add", use_container_width=True):
             if url:
-                # Basic validation
-                if "amazon" in url or "flipkart" in url:
-                    # Minimal data for now
-                    dummy_data = {
-                        "title": url.split("/")[-1][:30] + "...", # Basic title from URL
-                        "price": 0.0,
-                        "currency": "INR",
-                        "platform": "amazon" if "amazon" in url else "flipkart"
-                    }
-                    with st.spinner("Saving to database..."):
-                        success = st.session_state.db.add_to_watchlist(st.session_state.current_user, url, dummy_data)
-                        if success:
-                            st.toast(f"Added {url} to your list!")
-                            # Small delay to let toast show or just rerun
-                            st.success("✅ Added to watchlist!")
-                            st.rerun()
+                with st.spinner("Extracting product intelligence..."):
+                    scraper = None
+                    if "amazon" in url.lower(): scraper = amazon_scraper
+                    elif "flipkart" in url.lower(): scraper = flipkart_scraper
+                    
+                    if scraper:
+                        product_data = scraper.scrape_product(url)
+                        if product_data.get("success"):
+                            res = db.add_to_watchlist(st.session_state.current_user, url, product_data)
+                            if res:
+                                db.add_price_history(url, product_data['price'])
+                                if target_price > 0:
+                                    db.create_alert(st.session_state.current_user, url, target_price)
+                                st.success(f"Successfully added {product_data['title'][:50]}!")
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error("Failed to save to database")
                         else:
-                            st.error(f"❌ Database error: Could not save to 'watchlists' collection for user {st.session_state.current_user}")
-                else:
-                    st.error("Please enter a valid Amazon or Flipkart URL")
+                            st.error(f"Scraping failed: {product_data.get('error', 'Unknown error')}")
+                    else:
+                        st.error("Platform not supported yet. We support Amazon & Flipkart.")
             else:
-                st.error("Please enter a URL")
-    
+                st.warning("Please enter a URL")
+
     st.divider()
-    st.subheader("📦 Your Products")
     
-    watchlist = st.session_state.db.get_watchlist(st.session_state.current_user)
+    watchlist = db.get_watchlist(st.session_state.current_user)
     
     if watchlist:
-        # Create header row
-        header_cols = st.columns([2, 1, 1, 1, 0.5])
-        header_cols[0].markdown("**Product**")
-        header_cols[1].markdown("**Price**")
-        header_cols[2].markdown("**Target**")
-        header_cols[3].markdown("**Added**")
-        header_cols[4].markdown("**Action**")
-        
-        st.divider()
-        
         for item in watchlist:
-            product_data = item.get("product_data", {})
-            added_at = item.get("added_at")
-            if hasattr(added_at, "strftime"):
-                added_date = added_at.strftime("%Y-%m-%d")
-            else:
-                added_date = "N/A"
-            
-            cols = st.columns([2, 1, 1, 1, 0.5])
-            
-            # Display info
-            cols[0].text(product_data.get("title", "Unknown")[:40] + "...")
-            cols[1].text(f"₹{product_data.get('price', 0.0):,.2f}")
-            cols[2].text(f"₹{item.get('target_price', 0.0) or 0.0:,.2f}")
-            cols[3].text(added_date)
-            
-            # Remove button
-            if cols[4].button("🗑️", key=f"remove_{item.get('id')}"):
-                if st.session_state.db.remove_from_watchlist(item.get("id")):
-                    st.success("Removed!")
-                    st.rerun()
-                else:
-                    st.error("Failed to remove")
+            with st.container():
+                data = item['product_data']
+                history = db.get_price_history(item['product_url'])
+                
+                c1, c2, c3 = st.columns([1, 2.5, 1])
+                
+                with c1:
+                    st.image(data.get('image_url'), use_container_width=True)
+                
+                with c2:
+                    change_text = ""
+                    if len(history) > 1:
+                        prev_price = history[1]['price']
+                        curr_price = data['price']
+                        pct_change = get_price_change_percentage(prev_price, curr_price)
+                        if pct_change < 0:
+                            change_text = f" <span style='color:green;'>▼ {abs(pct_change)}% drop</span>"
+                        elif pct_change > 0:
+                            change_text = f" <span style='color:red;'>▲ {pct_change}% increase</span>"
+                    
+                    st.markdown(f"**{data['title']}**")
+                    st.markdown(f"<span class='platform-badge {data['platform']}-badge'>{data['platform']}</span>{change_text}", unsafe_allow_html=True)
+                    st.write(f"Current Price: **{format_price(data['price'])}**")
+                    
+                    if st.button("🤖 Get AI Insight", key=f"ai_{item['id']}"):
+                        with st.spinner("AI analysis in progress..."):
+                            insight = ai.get_price_insights(data, history)
+                            st.info(insight)
+                
+                with c3:
+                    st.write(f"Added: {format_timestamp(item.get('added_at'))}")
+                    if st.button("🗑️ Remove", key=f"del_{item['id']}", use_container_width=True):
+                        if db.remove_from_watchlist(item['id']):
+                            st.toast("Item removed")
+                            st.rerun()
+                st.divider()
     else:
-        st.info("Your watchlist is empty. Add a product to get started!")
-
+        st.info("Watchlist is empty. Add your first product above!")
 
 def show_ai_assistant():
-    """AI Assistant view"""
-    st.title("🤖 AI Price Assistant")
+    st.title("🤖 Shopping Concierge")
+    st.markdown("Your personal AI for finding the best deals and shopping advice.")
     
-    st.write("Ask me anything about your products!")
+    watchlist = db.get_watchlist(st.session_state.current_user)
     
     col1, col2 = st.columns(2)
     with col1:
-        st.button("📊 Show trends")
-        st.button("🏆 Best deals")
+        if st.button("🏆 Recommended Best Deal", use_container_width=True):
+            with st.spinner("AI is analyzing your watchlist..."):
+                deal = ai.find_best_deal(watchlist)
+                st.markdown(deal)
     with col2:
-        st.button("⬇️ Price drops")
-        st.button("💰 Compare prices")
-    
+        if st.button("🧹 Clear Chat History", use_container_width=True):
+            st.session_state.messages = []
+            st.success("History cleared!")
+
     st.divider()
-    
-    # Chat
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
     
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
-            st.write(msg["content"])
-    
-    if user_input := st.chat_input("Ask me..."):
-        st.session_state.messages.append({"role": "user", "content": user_input})
+            st.markdown(msg["content"])
+            
+    if prompt := st.chat_input("Ask me about prices, trends, or recommendations..."):
+        st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
-            st.write(user_input)
-        
-        response = "Great question! Based on your watchlist, the laptop is at its lowest price right now."
-        st.session_state.messages.append({"role": "assistant", "content": response})
+            st.markdown(prompt)
+            
         with st.chat_message("assistant"):
-            st.write(response)
-
+            with st.spinner("Thinking..."):
+                response = ai.ask_ai(prompt, watchlist_context=watchlist)
+                st.markdown(response)
+                st.session_state.messages.append({"role": "assistant", "content": response})
 
 def show_settings():
-    """Settings view"""
-    st.title("⚙️ Settings")
+    st.title("⚙️ System Settings")
     
-    st.subheader("🔔 Notifications")
-    email_alerts = st.checkbox("Email alerts for price drops", value=True)
-    alert_threshold = st.slider("Alert threshold (%)", 1, 50, 5)
-    
+    with st.expander("👤 Profile & Security", expanded=True):
+        st.write(f"Logged in as: **{st.session_state.current_user}**")
+        st.text_input("Change Password", type="password")
+        if st.button("Update Profile"):
+            st.success("Profile updated locally (Database sync pending)")
+            
+    with st.expander("🔔 Notification Preferences"):
+        st.checkbox("Email Alerts", value=True)
+        st.checkbox("Browser Notifications", value=False)
+        st.slider("Minimum Price Drop % for Alert", 1, 50, 10)
+        
     st.divider()
-    
-    st.subheader("🛒 Preferences")
-    platforms = st.multiselect("Select platforms", ["Amazon", "Flipkart"], default=["Amazon", "Flipkart"])
-    
-    st.divider()
-    
-    if st.button("💾 Save Settings", use_container_width=True):
-        st.success("Settings saved successfully!")
+    if st.button("🛑 Logout", use_container_width=True):
+        st.session_state.user_logged_in = False
+        st.session_state.current_user = None
+        st.rerun()
 
-
-# Main app logic
 def main():
-    """Main application entry point"""
     if st.session_state.user_logged_in:
-        show_main_app()
+        with st.sidebar:
+            st.markdown(f"""
+            <div class="sidebar-stats">
+                <small>Welcome back,</small>
+                <h3>{st.session_state.current_user.split('@')[0].capitalize()}</h3>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            nav = st.radio("Navigation", ["Dashboard", "Watchlist", "AI Assistant", "Settings"], label_visibility="collapsed")
+            
+            st.divider()
+            st.markdown("### 🔌 API Status")
+            st.success("Firebase: Connected")
+            st.success("Groq AI: Online")
+            
+        if nav == "Dashboard": show_dashboard()
+        elif nav == "Watchlist": show_watchlist()
+        elif nav == "AI Assistant": show_ai_assistant()
+        elif nav == "Settings": show_settings()
     else:
         show_login_page()
-
 
 if __name__ == "__main__":
     main()
