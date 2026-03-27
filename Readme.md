@@ -107,26 +107,7 @@ Shoes   | ₹2200         | ₹2000  | Tracking
 
 ---
 
-### 3️⃣ Price Trend Visualization
-
-Users can open a product to view history.
-
-```
-Price Trend
-
-6000 ┤
-5500 ┤   █
-5000 ┤   █      █
-4500 ┤   █      █
-4000 ┤   █      █
-3500 ┤   █      █
-```
-
-Or view **Matplotlib graphs**.
-
----
-
-### 4️⃣ AI Assistant Panel
+### AI Assistant Panel
 
 Users can ask questions like:
 
@@ -166,28 +147,6 @@ requirements.txt
 
 ---
 
-# Data Storage
-
-The system uses **SQLite**.
-
-### Users Table
-
-| id | username | password |
-
----
-
-### Watchlist Table
-
-| id | user_id | url | product_name | target_price | last_price |
-
----
-
-### Price History Table
-
-| id | product_id | price | timestamp |
-
----
-
 #  AI Model Choice
 
 To keep the system **lightweight**, we use small embedding models.
@@ -199,53 +158,6 @@ Recommended models:
 ```
 all-MiniLM-L6-v2
 ```
-
-Size:
-
-```
-~90MB
-```
-
-Advantages:
-
-✔ Fast
-✔ Low memory usage
-✔ Works on CPU
-
----
-
-### LLM Options
-
-#### Option 1 (Local)
-
-```
-Ollama + Llama3 8B
-```
-
-Pros:
-
-* Private
-* Free
-
-Cons:
-
-* Requires ~8GB RAM
-
----
-
-#### Option 2 (Lightweight Cloud)
-
-```
-OpenAI GPT-4o-mini
-```
-
-Pros:
-
-* Cheap
-* Very fast
-* High quality answers
-
----
 
 Recommended for this project:
 
@@ -301,8 +213,6 @@ The product has dropped 16% in the past week.
 The current price is the lowest recorded.
 This may be a good time to purchase.
 ```
-
----
 
 ---
 
