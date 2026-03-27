@@ -21,20 +21,20 @@ The project combines **web scraping, price monitoring, visualization, and (RAG)*
 
 ### Core Features
 
-✔ User signup and login
-✔ Add product URLs to a watchlist
-✔ Automatic price scraping
-✔ Price history tracking
-✔ Target price alerts
-✔ Price trend visualization
+- User signup and login
+- Add product URLs to a watchlist
+- Automatic price scraping
+- Price history tracking
+- Target price alerts
+- Price trend visualization
 
 ### AI Features
 
-✔ Ask AI about product prices
-✔ AI-generated price insights
-✔ Cheapest product detection
-✔ Price drop analysis
-✔ Buying recommendation
+- Ask AI about product prices
+- AI-generated price insights
+- Cheapest product detection
+- Price drop analysis
+- Buying recommendation
 
 ---
 

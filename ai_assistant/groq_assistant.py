@@ -11,7 +11,7 @@ class GroqAssistant:
         self.client = None
         self.model = GROQ_MODEL
         self.conversation_history = [
-            {"role": "system", "content": "You are SmartPriceWatcher AI, a premium shopping consultant. You help users make informed buying decisions by analyzing price trends, comparing products across platforms like Amazon and Flipkart, and providing expert advice. Your tone is professional, helpful, and data-driven."}
+            {"role": "system", "content": "You are Price Pulse AI, a professional shopping consultant. You provide data-driven insights on price trends across platforms like Amazon and Flipkart. Your tone is objective, analytical, and professional. Avoid using emojis in your responses."}
         ]
         try:
             if GROQ_API_KEY:
@@ -22,84 +22,84 @@ class GroqAssistant:
     
     def get_price_insights(self, product_data: Dict, price_history: List[Dict]) -> str:
         if not self.client:
-            return "AI Insights are currently unavailable due to a technical issue. Please check your API key or connection."
+            return "AI Insights are currently unavailable. Please check your configuration."
         try:
             product_name = product_data.get('title', 'this product')
             current_price = product_data.get('price', 0)
             price_context = self._format_price_context(price_history)
             prompt = f"""
-            Analyze the price history for the product: "{product_name}"
-            Current Price: ₹{current_price:,.2f}
-            Historical Price Data:
+            Analyze the price history for: "{product_name}"
+            Current Price: INR {current_price:,.2f}
+            Price History:
             {price_context}
-            Based on this data, please provide a detailed analysis:
-            1. **Price Trajectory**: Is the price currently at a peak, a valley, or a stable plateau?
-            2. **Buy/Wait Recommendation**: Provide a clear recommendation (Buy Now, Wait for Drop, or Watch Closely) with reasoning.
-            3. **Value Assessment**: How does the current price compare to the historical average (₹{self._calculate_avg(price_history):,.2f})?
-            4. **Predicted Next Move**: Based on the pattern, what is the likely short-term price movement?
-            Use markdown formatting for a professional look.
+            
+            Provide a professional analysis covering:
+            1. Price Trajectory: Peak, valley, or stable.
+            2. Purchase Recommendation: Buy, wait, or watch, with reasoning based on historical data.
+            3. Value Assessment: Comparison with historical average (INR {self._calculate_avg(price_history):,.2f}).
+            4. Prediction: Likely short-term price movement based on patterns.
+            
+            Format with markdown and do not use emojis.
             """
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=800,
-                temperature=0.3
+                temperature=0.2
             )
             return response.choices[0].message.content
         except Exception as e:
             logger.error(f"Error generating insights: {e}")
-            return "I analyzed the price trends but encountered an error generating the report."
+            return "Technical error encountered during trend analysis."
     
     def find_best_deal(self, products: List[Dict]) -> str:
         if not self.client:
-            return "Dealer identification AI is currently offline. You can manually compare prices in your dashboard."
+            return "AI analysis is currently offline."
         try:
             if not products:
-                return "You haven't added any products to compare yet."
+                return "No products available for comparison."
             product_context = self._format_products(products)
             prompt = f"""
-            I need you to act as a value-focused shopping expert. Compare the following products from the user's watchlist and identify the BEST DEAL.
-            Products under consideration:
+            Compare the following products and identify the best value recommendation.
+            Products:
             {product_context}
-            Criteria for your recommendation:
-            - Best price-to-feature ratio.
-            - Platform reliability (Amazon vs Flipkart).
-            - Current discounts or price drops.
-            Format your response as a "Deal of the Day" recommendation with:
-            1. **The Winner**: Clearly state which product is the best deal.
-            2. **Why it wins**: 3 bullet points explaining the value.
-            3. **Alternative**: A 'Runner-up' if the first choice doesn't suit some users.
-            4. **Buying Tip**: A pro-tip for this specific category of products.
-            Use emojis to make it engaging!
+            
+            Identify:
+            1. The Top Recommendation: Best value-to-feature ratio.
+            2. Rationale: Data-backed reasons for this choice.
+            3. Alternative: A secondary option for different budgets.
+            4. Professional Tip: Expert advice for this product category.
+            
+            Use professional markdown formatting. Do not use emojis.
             """
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=1000,
-                temperature=0.5
+                temperature=0.4
             )
             return response.choices[0].message.content
         except Exception as e:
             logger.error(f"Error finding best deal: {e}")
-            return "I couldn't compare the deals right now."
+            return "Unable to compare deals at this time."
     
     def ask_ai(self, question: str, watchlist_context: List[Dict] = None) -> str:
         if not self.client:
-            return "AI Chat Assistant is currently offline. You can still track prices and manage your watchlist!"
+            return "AI assistant is currently offline."
         try:
             messages = self.conversation_history.copy()
             if watchlist_context:
                 context_str = self._format_products(watchlist_context)
                 messages.append({
                     "role": "system", 
-                    "content": f"The user currently has these products in their watchlist: {context_str}"
+                    "content": f"User Watchlist: {context_str}"
                 })
             messages.append({"role": "user", "content": question})
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 max_tokens=1000,
-                temperature=0.7
+                temperature=0.6
             )
             answer = response.choices[0].message.content
             self.conversation_history.append({"role": "user", "content": question})
@@ -109,11 +109,11 @@ class GroqAssistant:
             return answer
         except Exception as e:
             logger.error(f"AI Assistant error: {e}")
-            return "I'm having trouble thinking right now. Please try again in a moment."
+            return "System busy. Please try again later."
 
     def _format_price_context(self, history: List[Dict]) -> str:
         if not history: return "No historical data available."
-        return "\n".join([f"- {h.get('timestamp')}: ₹{h.get('price', 0):,.2f}" for h in history[:15]])
+        return "\n".join([f"- {h.get('timestamp')}: INR {h.get('price', 0):,.2f}" for h in history[:15]])
 
     def _calculate_avg(self, history: List[Dict]) -> float:
         if not history: return 0.0
@@ -125,7 +125,9 @@ class GroqAssistant:
         for i, p in enumerate(products, 1):
             data = p.get('product_data', {})
             formatted += f"\n{i}. {data.get('title')} ({data.get('platform', 'unknown')})\n"
-            formatted += f"   - Price: ₹{data.get('price', 0):,.2f}\n"
+            formatted += f"   - Current Price: INR {data.get('price', 0):,.2f}\n"
+            if p.get('history_summary'):
+                formatted += f"   - Price History: {', '.join(p['history_summary'])}\n"
             if data.get('description'):
-                formatted += f"   - Details: {data.get('description')[:150]}...\n"
+                formatted += f"   - Description: {data.get('description')[:100]}...\n"
         return formatted

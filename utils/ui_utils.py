@@ -40,22 +40,35 @@ def set_page_theme():
             background: rgba(30, 41, 59, 0.4);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
-            border-radius: 20px;
+            border-radius: 16px;
             border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 25px;
-            margin-bottom: 25px;
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            padding: 15px;
+            margin-bottom: 20px;
+            height: 380px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: all 0.3s ease;
         }
         
         .product-card:hover {
-            transform: translateY(-8px);
+            transform: translateY(-5px);
             background: rgba(30, 41, 59, 0.6);
             border-color: #10b981;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.3);
+        }
+
+        .product-card img {
+            width: 100%;
+            height: 160px;
+            object-fit: contain;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            background: white;
         }
         
         .price-tag {
-            font-size: 28px;
+            font-size: 22px;
             font-weight: 800;
             background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
             -webkit-background-clip: text;

@@ -13,7 +13,7 @@ def init_db():
 def show_ai_assistant():
     set_page_theme()
     init_db()
-    st.title("🤖 AI Price Assistant")
+    st.title("AI Price Assistant")
     
     if not st.session_state.get("user_logged_in"):
         st.warning("Please login first.")
@@ -38,7 +38,7 @@ def show_ai_assistant():
                 summary = "**Your current watchlist:**\n\n"
                 for item in watchlist:
                     p = item.get("product_data", {})
-                    summary += f"- **{p.get('title', 'Unknown')}**: ₹{p.get('price', 0.0):,.2f} on {p.get('platform', 'Unknown').capitalize()}\n"
+                    summary += f"- **{p.get('title', 'Unknown')}**: INR {p.get('price', 0.0):,.2f} on {p.get('platform', 'Unknown').capitalize()}\n"
                 st.info(summary)
             else:
                 st.warning("Your watchlist is empty!")
@@ -50,7 +50,7 @@ def show_ai_assistant():
     st.divider()
     
     # Chat interface
-    st.subheader("💬 Chat with AI")
+    st.subheader("Chat with AI")
     
     if "messages" not in st.session_state:
         st.session_state.messages = [

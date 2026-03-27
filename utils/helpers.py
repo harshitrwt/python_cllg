@@ -30,7 +30,7 @@ def extract_product_info(html: str, platform: str) -> dict:
 
 def format_price(price: float, currency: str = "INR") -> str:
     currency_symbols = {
-        "INR": "₹",
+        "INR": "INR",
         "USD": "$",
         "EUR": "€",
         "GBP": "£"

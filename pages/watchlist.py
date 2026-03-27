@@ -25,7 +25,7 @@ def init_db():
 def show_watchlist():
     set_page_theme()
     init_db()
-    st.title("📌 My Watchlist")
+    st.title("My Watchlist")
     
     if not st.session_state.get("user_logged_in"):
         st.warning("Please login first.")
@@ -35,7 +35,7 @@ def show_watchlist():
     user_id = st.session_state.current_user
 
     # --- Add New Product ---
-    st.subheader("➕ Add New Product")
+    st.subheader("Add New Product")
     
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -80,8 +80,8 @@ def show_watchlist():
                 
                 with p_col2:
                     final_title = st.text_input("Product Name", value=data.get("title", ""))
-                    current_price = st.number_input("Current Price (₹)", value=float(data.get("price", 1.0)))
-                    target_price = st.number_input("Set your Target Price (₹)", min_value=1.0, value=current_price * 1.0 if current_price > 0 else 1.0)
+                    current_price = st.number_input("Current Price (INR)", value=float(data.get("price", 1.0)))
+                    target_price = st.number_input("Set your Target Price (INR)", min_value=1.0, value=current_price * 1.0 if current_price > 0 else 1.0)
                     
                     if current_price > 0 and target_price < current_price * 0.5:
                         st.warning("⚠️ Target is >50% lower than current price. Might take a long time!")
@@ -107,7 +107,7 @@ def show_watchlist():
 
     st.divider()
     # --- Watchlist Display ---
-    st.subheader("📦 Your Watched Products")
+    st.subheader("Your Watched Products")
     watchlist = db.get_watchlist(user_id)
     
     if watchlist:
@@ -123,12 +123,12 @@ def show_watchlist():
                 
                 with col2:
                     st.write(f"Platform: **{product_data.get('platform', 'Unknown').capitalize()}**")
-                    st.write(f"Current Price: **₹{product_data.get('price', 0.0):,.2f}**")
-                    st.write(f"Target Price: **₹{item.get('target_price', 0.0) or 0.0:,.2f}**")
+                    st.write(f"Current Price: **INR {product_data.get('price', 0.0):,.2f}**")
+                    st.write(f"Target Price: **INR {item.get('target_price', 0.0) or 0.0:,.2f}**")
                     
                     added_at = item.get("added_at")
                     date_str = added_at.strftime("%Y-%m-%d") if hasattr(added_at, "strftime") else "N/A"
-                    st.button("❌ Remove", key=f"remove_p_{doc_id}", on_click=lambda id=doc_id: db.remove_from_watchlist(id))
+                    st.button("Remove", key=f"remove_p_{doc_id}", on_click=lambda id=doc_id: db.remove_from_watchlist(id))
                     st.write(f"[Open Product Page]({item.get('product_url')})")
     else:
         st.info("Watchlist is empty.")

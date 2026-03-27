@@ -14,7 +14,7 @@ def init_db():
 def show_dashboard():
     set_page_theme()
     init_db()
-    st.title("📊 Dashboard")
+    st.title("Dashboard")
     
     if not st.session_state.get("user_logged_in"):
         st.warning("Please login first.")
@@ -44,7 +44,7 @@ def show_dashboard():
     st.divider()
     
     # Recent activity
-    st.subheader("🔔 Recent Activity")
+    st.subheader("Recent Activity")
     
     if watchlist:
         activity_data = []
@@ -55,8 +55,8 @@ def show_dashboard():
             
             activity_data.append({
                 "Product": product_data.get("title", "New Product"),
-                "Price": f"₹{product_data.get('price', 0.0):,.2f}",
-                "Status": "🟢 Monitoring",
+                "Price": f"INR {product_data.get('price', 0.0):,.2f}",
+                "Status": "Monitoring",
                 "Time": time_str
             })
         
