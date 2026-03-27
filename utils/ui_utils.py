@@ -1,6 +1,29 @@
 import streamlit as st
 
+import json
+import os
+
+def load_session():
+    SESSION_FILE = "local_session.json"
+    if os.path.exists(SESSION_FILE):
+        try:
+            with open(SESSION_FILE, "r") as f:
+                data = json.load(f)
+                return data.get("current_user")
+        except:
+            pass
+    return None
+
 def set_page_theme():
+    if "user_logged_in" not in st.session_state:
+        saved_user = load_session()
+        if saved_user:
+            st.session_state.user_logged_in = True
+            st.session_state.current_user = saved_user
+        else:
+            st.session_state.user_logged_in = False
+            st.session_state.current_user = None
+
     st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');

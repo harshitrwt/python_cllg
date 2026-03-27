@@ -1,13 +1,19 @@
 import streamlit as st
 from database.firebase_db import FirebaseDB
+from ai_assistant.groq_assistant import GroqAssistant
 from utils.ui_utils import set_page_theme
 
 def init_db():
     if "db" not in st.session_state:
         try:
             st.session_state.db = FirebaseDB()
+        except:
+            pass
+    if "ai" not in st.session_state:
+        try:
+            st.session_state.ai = GroqAssistant()
         except Exception as e:
-            st.error(f"Failed to connect to Firebase: {e}")
+            st.error(f"Failed to load AI Assistant: {e}")
             st.stop()
 
 def show_ai_assistant():
@@ -45,7 +51,18 @@ def show_ai_assistant():
     
     with col2:
         if st.button("🏆 Best time to buy?"):
-            st.success("Analysis suggests waiting for weekend sales for electronics in your list.")
+            if watchlist:
+                with st.spinner("Analyzing your entire watchlist..."):
+                    enriched_watchlist = []
+                    for item in watchlist:
+                        hist = db.get_price_history(item['product_url'], limit=5)
+                        item_with_hist = item.copy()
+                        item_with_hist['history_summary'] = [f"{h.get('timestamp')}: INR {h.get('price')}" for h in hist if h.get('timestamp')]
+                        enriched_watchlist.append(item_with_hist)
+                    deal = st.session_state.ai.find_best_deal(enriched_watchlist)
+                    st.success(deal)
+            else:
+                st.warning("Your watchlist is empty!")
     
     st.divider()
     
@@ -66,11 +83,18 @@ def show_ai_assistant():
         with st.chat_message("user"):
             st.write(user_input)
         
-        # Simple response logic
-        response = "I see you're interested in prices. Once our web scrapers are fully automated, I'll be able to give you precise per-second trends!"
-        st.session_state.messages.append({"role": "assistant", "content": response})
         with st.chat_message("assistant"):
-            st.write(response)
+            with st.spinner("Analyzing data..."):
+                enriched_watchlist = []
+                for item in watchlist:
+                    hist = db.get_price_history(item['product_url'], limit=5)
+                    item_with_hist = item.copy()
+                    item_with_hist['history_summary'] = [f"{h.get('timestamp')}: INR {h.get('price')}" for h in hist if h.get('timestamp')]
+                    enriched_watchlist.append(item_with_hist)
+                
+                response = st.session_state.ai.ask_ai(user_input, watchlist_context=enriched_watchlist)
+                st.write(response)
+                st.session_state.messages.append({"role": "assistant", "content": response})
 
 if __name__ == "__main__":
     show_ai_assistant()

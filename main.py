@@ -8,6 +8,31 @@ from scrapers.amazon_scraper import AmazonScraper
 from scrapers.flipkart_scraper import FlipkartScraper
 from ai_assistant.groq_assistant import GroqAssistant
 import time
+import json
+import os
+
+SESSION_FILE = "local_session.json"
+
+def save_session(email):
+    with open(SESSION_FILE, "w") as f:
+        json.dump({"current_user": email}, f)
+
+def load_session():
+    if os.path.exists(SESSION_FILE):
+        try:
+            with open(SESSION_FILE, "r") as f:
+                data = json.load(f)
+                return data.get("current_user")
+        except:
+            pass
+    return None
+
+def clear_session():
+    if os.path.exists(SESSION_FILE):
+        try:
+            os.remove(SESSION_FILE)
+        except:
+            pass
 
 st.set_page_config(
     page_title="Price Pulse AI",
@@ -24,9 +49,14 @@ from utils.ui_utils import set_page_theme
 set_page_theme()
 
 if "user_logged_in" not in st.session_state:
-    st.session_state.user_logged_in = False
-if "current_user" not in st.session_state:
-    st.session_state.current_user = None
+    saved_user = load_session()
+    if saved_user:
+        st.session_state.user_logged_in = True
+        st.session_state.current_user = saved_user
+    else:
+        st.session_state.user_logged_in = False
+        st.session_state.current_user = None
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -63,6 +93,7 @@ def show_login_page():
                         if user and user.get("password") == password:
                             st.session_state.user_logged_in = True
                             st.session_state.current_user = email.lower().strip()
+                            save_session(st.session_state.current_user)
                             st.success("Welcome back!")
                             time.sleep(0.5)
                             st.rerun()
@@ -96,18 +127,17 @@ def show_dashboard():
     st.title("Smart Dashboard")
     
     # Live Price Sync Fragment (Runs in background)
-    @st.fragment(run_every=300)
-    def auto_sync():
-        if watchlist := db.get_watchlist(st.session_state.current_user):
-            for item in watchlist:
-                url = item['product_url']
-                scraper = amazon_scraper if "amazon" in url.lower() else flipkart_scraper
-                new_data = scraper.scrape_product(url)
-                if new_data.get("success"):
-                    db.update_product_price(item['id'], new_data['price'])
-            st.rerun()
-
-    auto_sync()
+    if hasattr(st, "fragment"):
+        @st.fragment(run_every=300)
+        def auto_sync():
+            if watchlist := db.get_watchlist(st.session_state.current_user):
+                for item in watchlist:
+                    url = item['product_url']
+                    scraper = amazon_scraper if "amazon" in url.lower() else flipkart_scraper
+                    new_data = scraper.scrape_product(url)
+                    if new_data.get("success"):
+                        db.update_product_price(item['id'], new_data['price'])
+        auto_sync()
     
     watchlist = db.get_watchlist(st.session_state.current_user)
     
@@ -255,7 +285,7 @@ def show_watchlist():
                 c1, c2, c3 = st.columns([1, 2.5, 1])
                 
                 with c1:
-                    st.image(data.get('image_url'), use_container_width=True)
+                    st.image(data.get('image_url'), use_column_width=True)
                 
                 with c2:
                     change_text = ""
@@ -350,6 +380,7 @@ def show_settings():
     if st.button("Logout", use_container_width=True):
         st.session_state.user_logged_in = False
         st.session_state.current_user = None
+        clear_session()
         st.rerun()
 
 def main():

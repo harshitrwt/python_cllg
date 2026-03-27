@@ -127,12 +127,12 @@ class FirebaseDB:
             from google.cloud.firestore_v1.base_query import FieldFilter
             docs = self.db.collection("price_history")\
                 .where(filter=FieldFilter("product_url", "==", product_url))\
-                .order_by("timestamp", direction=firestore.Query.DESCENDING)\
-                .limit(limit)\
                 .stream()
             
             history = [doc.to_dict() for doc in docs]
-            return history
+            # Avoid composite index requirement by sorting in Python
+            history.sort(key=lambda x: x.get("timestamp", datetime.min), reverse=True)
+            return history[:limit]
         except Exception as e:
             logger.error(f"Error fetching price history: {e}")
             return []
