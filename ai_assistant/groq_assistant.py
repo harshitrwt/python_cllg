@@ -11,7 +11,7 @@ class GroqAssistant:
         self.client = None
         self.model = GROQ_MODEL
         self.conversation_history = [
-            {"role": "system", "content": "You are Price Pulse AI, a professional shopping consultant. You provide data-driven insights on price trends across platforms like Amazon and Flipkart. Your tone is objective, analytical, and professional. Avoid using emojis in your responses."}
+            {"role": "system", "content": "You are BetterDeals AI, a professional shopping consultant. You provide data-driven insights on price trends across platforms like Amazon and Flipkart. Your tone is objective, analytical, and professional. Avoid using emojis in your responses."}
         ]
         try:
             if GROQ_API_KEY:

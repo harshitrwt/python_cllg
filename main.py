@@ -35,7 +35,7 @@ def clear_session():
             pass
 
 st.set_page_config(
-    page_title="Price Pulse AI",
+    page_title="BetterDeals",
     page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded"
@@ -76,7 +76,7 @@ flipkart_scraper = FlipkartScraper()
 def show_login_page():
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
-        st.markdown("<h1 style='text-align: center; color: #f8fafc;'>Price Pulse AI</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center; color: #f8fafc;'>BetterDeals</h1>", unsafe_allow_html=True)
         st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 1.1rem;'>Professional Intelligent Price Tracking</p>", unsafe_allow_html=True)
         
         tab1, tab2 = st.tabs(["Secure Login", "Create Account"])
@@ -124,7 +124,7 @@ def show_login_page():
                         st.error("Passwords don't match or fields empty")
 
 def show_dashboard():
-    st.title("Smart Dashboard")
+    st.title("BetterDeals")
     
     # Live Price Sync Fragment (Runs in background)
     if hasattr(st, "fragment"):
@@ -198,7 +198,7 @@ def show_dashboard():
         st.info("Welcome! Start by adding a product URL in the Watchlist tab.")
         st.image("https://illustrations.popsy.co/gray/shopping-bag.svg", width=300)
     else:
-        st.subheader("Global Price Pulse")
+        st.subheader("Global Deals")
         all_history = []
         for item in watchlist[:3]:
             hist = db.get_price_history(item['product_url'], limit=10)
