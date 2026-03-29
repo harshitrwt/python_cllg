@@ -1,4 +1,4 @@
-# SmartPriceWatcher 
+# BetterDeals 
 
 ### AI-Powered Product Price Tracker with RAG Insights
 
