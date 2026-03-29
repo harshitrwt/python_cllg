@@ -7,9 +7,12 @@ from database.firebase_db import FirebaseDB
 from scrapers.amazon_scraper import AmazonScraper
 from scrapers.flipkart_scraper import FlipkartScraper
 from ai_assistant.groq_assistant import GroqAssistant
+from utils.notifications import send_price_drop_email
+from utils.helpers import format_price, get_price_change_percentage, format_timestamp
 import time
 import json
 import os
+import random
 
 SESSION_FILE = "local_session.json"
 
@@ -36,7 +39,7 @@ def clear_session():
 
 st.set_page_config(
     page_title="BetterDeals",
-    page_icon=None,
+    page_icon="🛍️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -95,6 +98,7 @@ def show_login_page():
                             st.session_state.current_user = email.lower().strip()
                             save_session(st.session_state.current_user)
                             st.success("Welcome back!")
+                            db.log_action("User Login", f"User logged in: {st.session_state.current_user}")
                             time.sleep(0.5)
                             st.rerun()
                         else:
@@ -123,20 +127,63 @@ def show_login_page():
                     else:
                         st.error("Passwords don't match or fields empty")
 
+@st.dialog("Product Details", width="large")
+def show_product_details(item, history):
+    data = item['product_data']
+    st.subheader(data.get('title', 'Unknown Product'))
+    
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        st.image(data.get('image_url'), use_column_width=True)
+        st.markdown(f"**Current Price:** ₹{data.get('price', 0):,.2f}")
+        if item.get('target_price'):
+            st.markdown(f"**Target Price:** ₹{item.get('target_price'):,.2f}")
+            diff = item.get('target_price') - data.get('price')
+            if diff >= 0:
+                st.markdown(f"✅ **Below Target by ₹{diff:,.2f}**")
+            else:
+                st.markdown(f"❌ **Above Target by ₹{abs(diff):,.2f}**")
+        st.markdown(f"[Buy on {data.get('platform', 'Store').capitalize()}]({item.get('product_url')})")
+        
+    with col2:
+        if history:
+            prices = [h['price'] for h in history]
+            st.markdown(f"**Highest Price:** ₹{max(prices):,.2f}")
+            st.markdown(f"**Lowest Price:** ₹{min(prices):,.2f}")
+            st.markdown(f"**Average Price:** ₹{sum(prices)/len(prices):,.2f}")
+            
+            df = pd.DataFrame(history)
+            fig = px.line(df, x='timestamp', y='price', title='Price History Timeline', template='plotly_dark', markers=True)
+            fig.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=300)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No historical data available yet.")
+
+
 def show_dashboard():
-    st.title("BetterDeals")
+    st.title("User Dashboard")
     
     # Live Price Sync Fragment (Runs in background)
     if hasattr(st, "fragment"):
         @st.fragment(run_every=300)
         def auto_sync():
-            if watchlist := db.get_watchlist(st.session_state.current_user):
-                for item in watchlist:
-                    url = item['product_url']
-                    scraper = amazon_scraper if "amazon" in url.lower() else flipkart_scraper
-                    new_data = scraper.scrape_product(url)
-                    if new_data.get("success"):
-                        db.update_product_price(item['id'], new_data['price'])
+            if "current_user" in st.session_state and st.session_state.current_user:
+                if watchlist := db.get_watchlist(st.session_state.current_user):
+                    for item in watchlist:
+                        url = item['product_url']
+                        scraper = amazon_scraper if "amazon" in url.lower() else flipkart_scraper
+                        new_data = scraper.scrape_product(url)
+                        db.log_action("Auto Sync", f"Checking {url}")
+                        if new_data.get("success"):
+                            old_price = item['product_data'].get('price', 0)
+                            new_price = new_data['price']
+                            if old_price != new_price:
+                                db.update_product_price(item['id'], new_price)
+                                db.log_action("Price Update", f"{new_data['title'][:30]}... price changed {old_price} -> {new_price}")
+                                target = item.get('target_price')
+                                if target and new_price <= target and old_price > target:
+                                    success, msg = send_price_drop_email(st.session_state.current_user, new_data['title'], old_price, new_price, url)
+                                    db.log_action("Notification Triggered", f"Email sent for {new_data['title'][:30]} - {msg}")
         auto_sync()
     
     watchlist = db.get_watchlist(st.session_state.current_user)
@@ -167,76 +214,93 @@ def show_dashboard():
 
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        st.metric("Tracking", len(watchlist))
+        st.metric("Products Tracked", len(watchlist))
     with c2:
-        st.metric("Deals Found", len(triggered_alerts), f"{len(watchlist)} total items")
+        st.metric("Target Reached", len(triggered_alerts))
     with c3:
         st.metric("Best Drop", f"{best_drop:.1f}%" if best_drop > 0 else "0%", best_product)
     with c4:
-        st.metric("Opportunity", f"INR {total_savings:,.2f}", "Current Savings")
+        st.metric("Est. Savings", f"INR {total_savings:,.2f}")
 
     if triggered_alerts:
         for alert in triggered_alerts:
-            st.toast(f"Target reached for {alert['product_data']['title'][:30]}!", icon=None)
-            st.success(f"TARGET REACHED! {alert['product_data']['title']} is now INR {alert['product_data']['price']:,.2f} (Target: INR {alert['target_price']:,.2f})")
-
-    if st.button("Sync Live Prices Now", use_container_width=True):
-        with st.spinner("Checking Amazon & Flipkart for changes..."):
-            for item in watchlist:
-                url = item['product_url']
-                scraper = amazon_scraper if "amazon" in url.lower() else flipkart_scraper
-                new_data = scraper.scrape_product(url)
-                if new_data.get("success"):
-                    db.update_product_price(item['id'], new_data['price'])
-            st.success("Prices updated! Screen refreshing...")
-            time.sleep(1)
-            st.rerun()
+            st.success(f"🔥 TARGET MET! {alert['product_data']['title'][:40]}... is now INR {alert['product_data']['price']:,.2f}")
 
     st.divider()
     
     if not watchlist:
-        st.info("Welcome! Start by adding a product URL in the Watchlist tab.")
-        st.image("https://illustrations.popsy.co/gray/shopping-bag.svg", width=300)
+        st.info("Start adding products to your watch list to see metrics.")
     else:
-        st.subheader("Global Deals")
-        all_history = []
-        for item in watchlist[:3]:
-            hist = db.get_price_history(item['product_url'], limit=10)
-            if hist:
-                for h in hist:
-                    h['Product'] = item['product_data']['title'][:20] + "..."
-                    all_history.append(h)
+        st.subheader("Interactive Price Tracking")
         
-        if all_history:
-            df = pd.DataFrame(all_history)
-            fig = px.line(df, x='timestamp', y='price', color='Product', template='plotly_white')
-            fig.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=350)
-            st.plotly_chart(fig, use_container_width=True)
-
-        st.subheader("Latest Tracked Products")
+        # Dashboard cards view instead of simple array
         cols = st.columns(3)
-        for i, item in enumerate(watchlist[-3:]):
+        for i, item in enumerate(watchlist):
             with cols[i % 3]:
                 data = item['product_data']
-                st.markdown(f"""
-                <div class="product-card">
-                    <div>
-                        <img src="{data.get('image_url')}" alt="Product Image">
-                        <span class="platform-badge {data['platform']}-badge">{data['platform']}</span>
-                        <h4 style="margin: 10px 0; font-size: 0.9rem;">{data['title'][:45]}...</h4>
-                        <span class="price-tag">INR {data['price']:,.2f}</span>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-                if st.button("Remove", key=f"dash_del_{item['id']}", use_container_width=True):
-                    if db.remove_from_watchlist(item['id']):
-                        st.toast("Item removed")
-                        st.rerun()
-
-from utils.helpers import format_price, get_price_change_percentage, format_timestamp
+                history = db.get_price_history(item['product_url'])
+                target = item.get('target_price')
+                curr_price = data['price']
+                
+                status_color = "gray"
+                status_text = "Tracking"
+                badge = ""
+                
+                if history and len(history) > 1:
+                    if curr_price < history[-1]['price']:
+                        badge = "📉 Price Drop"
+                    if curr_price == min([h['price'] for h in history]):
+                        badge = "🔥 Lowest in 30 Days"
+                        
+                if target:
+                    diff_pct = abs((curr_price - target) / target) * 100
+                    if curr_price <= target:
+                        status_color = "#22c55e" # Green
+                        status_text = "✅ Target Reached"
+                    elif diff_pct <= 5:
+                        status_color = "#eab308" # Orange
+                        status_text = "⏳ Near Target (Within 5%)"
+                    else:
+                        status_color = "#ef4444" # Red
+                        status_text = f"↗️ Above Target (+{diff_pct:.1f}%)"
+                        
+                html_content = f"""<div style="background: #1e293b; padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #334155; overflow: hidden;">
+<div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+<span style="font-size: 0.8rem; background: #3b82f6; padding: 2px 6px; border-radius: 4px;">{data['platform'].capitalize()}</span>
+{f'<span style="font-size: 0.8rem; background: #eab308; color: black; padding: 2px 6px; border-radius: 4px;">{badge}</span>' if badge else ''}
+</div>
+<div style="height: 120px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: white; border-radius: 6px;">
+<img src="{data.get('image_url', '')}" style="max-height: 100%; max-width: 100%; object-fit: contain;">
+</div>
+<h5 style="margin: 10px 0; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{data['title']}">{data['title']}</h5>
+<div style="display: flex; gap: 10px; align-items: baseline;">
+<h3 style="margin: 0; color: #f8fafc;">₹{curr_price:,.2f}</h3>
+{f'<span style="font-size: 0.8rem; color: #94a3b8;">Target: ₹{target:,.2f}</span>' if target else ''}
+</div>
+<p style="color: {status_color}; font-size: 0.85rem; margin-top: 5px; font-weight: bold;">{status_text}</p>
+</div>"""
+                st.markdown(html_content, unsafe_allow_html=True)
+                
+                # Mini chart
+                if history:
+                    df = pd.DataFrame(history)
+                    if len(df) > 1:
+                        fig = px.line(df, x='timestamp', y='price', template='plotly_dark')
+                        fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), height=80, xaxis_visible=False, yaxis_visible=False)
+                        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+                
+                card_cols = st.columns([1,1])
+                with card_cols[0]:
+                    if st.button("Details", key=f"details_{item['id']}", use_container_width=True):
+                        show_product_details(item, history)
+                with card_cols[1]:
+                    if st.button("Remove", key=f"dash_del_{item['id']}", use_container_width=True):
+                        if db.remove_from_watchlist(item['id']):
+                            st.toast("Item removed")
+                            st.rerun()
 
 def show_watchlist():
-    st.title("Intelligent Watchlist")
+    st.title("Add & Manage Products")
     
     with st.expander("Add New Product", expanded=True):
         col1, col2 = st.columns([4, 1])
@@ -260,6 +324,7 @@ def show_watchlist():
                                 db.add_price_history(url, product_data['price'])
                                 if target_price > 0:
                                     db.create_alert(st.session_state.current_user, url, target_price)
+                                db.log_action("Add Product", f"Added {product_data['title'][:30]}...")
                                 st.success(f"Successfully added {product_data['title'][:50]}!")
                                 time.sleep(1)
                                 st.rerun()
@@ -294,9 +359,9 @@ def show_watchlist():
                         curr_price = data['price']
                         pct_change = get_price_change_percentage(prev_price, curr_price)
                         if pct_change < 0:
-                            change_text = f" <span style='color:green;'>▼ {abs(pct_change)}% drop</span>"
+                            change_text = f" <span style='color:#22c55e;'>▼ {abs(pct_change)}% drop</span>"
                         elif pct_change > 0:
-                            change_text = f" <span style='color:red;'>▲ {pct_change}% increase</span>"
+                            change_text = f" <span style='color:#ef4444;'>▲ {pct_change}% increase</span>"
                     
                     st.markdown(f"**{data['title']}**")
                     st.markdown(f"<span class='platform-badge {data['platform']}-badge'>{data['platform']}</span>{change_text}", unsafe_allow_html=True)
@@ -305,20 +370,87 @@ def show_watchlist():
                     if target:
                         st.write(f"Target Price: **₹{target:,.2f}**")
                     
-                    if st.button("Get AI Insight", key=f"ai_{item['id']}"):
+                    if st.button("View Insights", key=f"ai_{item['id']}"):
                         with st.spinner("AI analysis in progress..."):
                             insight = ai.get_price_insights(data, history)
                             st.info(insight)
                 
                 with c3:
                     st.write(f"Added: {format_timestamp(item.get('added_at'))}")
+                    if st.button("View Full Details", key=f"view_{item['id']}", use_container_width=True):
+                        show_product_details(item, history)
                     if st.button("Remove", key=f"del_{item['id']}", use_container_width=True):
                         if db.remove_from_watchlist(item['id']):
+                            db.log_action("Remove Product", f"Removed {item['id']}")
                             st.toast("Item removed")
                             st.rerun()
                 st.divider()
     else:
         st.info("Watchlist is empty. Add your first product above!")
+
+def show_developer_panel():
+    st.title("Developer & Testing Tools")
+    
+    st.markdown("### 1. Mock/Test Tracking System")
+    st.info("Use this section to trigger manual price drops when testing the notification and status system, without waiting for Amazon/Flipkart to actually drop the price.")
+    
+    watchlist = db.get_watchlist(st.session_state.current_user)
+    if not watchlist:
+        st.warning("No items in watchlist. Please add an item first.")
+    else:
+        test_item = st.selectbox("Select Product to Manipulate", options=[(i['id'], i['product_data']['title']) for i in watchlist], format_func=lambda x: x[1][:50] + "...")
+        item_id = test_item[0]
+        selected_item = next(i for i in watchlist if i['id'] == item_id)
+        
+        current_price = selected_item['product_data']['price']
+        st.write(f"**Current Price:** ₹{current_price:,.2f}")
+        
+        new_override_price = st.number_input("Override Price", min_value=0.0, value=float(current_price * 0.9))
+        
+        if st.button("Force Price Drop & Run Sync"):
+            db.log_action("Test Action", f"Forced price change for {item_id} to {new_override_price}")
+            db.update_product_price(item_id, new_override_price)
+            
+            # Simulate auto_sync behavior
+            old_price = current_price
+            target = selected_item.get('target_price')
+            
+            if target and new_override_price <= target and old_price > target:
+                success, msg = send_price_drop_email(st.session_state.current_user, selected_item['product_data']['title'], old_price, new_override_price, selected_item['product_url'])
+                if success:
+                    st.success(f"✅ Email notification triggered! Status: {msg}")
+                    db.log_action("Notification Triggered", f"Mock email sent for {selected_item['product_data']['title'][:30]}")
+            elif not target:
+                st.warning("⚠️ **No notification sent.** You never set a 'Target Price' for this product when adding it to your watchlist! The system doesn't know when to alert you.")
+            elif new_override_price > target:
+                st.warning(f"⚠️ **No notification sent.** The mock price (₹{new_override_price:,.2f}) is still HIGHER than your Target Price (₹{target:,.2f}).")
+            elif old_price <= target:
+                st.info(f"ℹ️ **No notification sent.** The previous price (₹{old_price:,.2f}) was ALREADY below the target price. Notifications only fire when a price crosses the threshold.")
+            
+            st.success("Price overwritten successfully! Check dashboard to see visual updates.")
+            time.sleep(1)
+            st.rerun()
+            
+    st.divider()
+    st.markdown("### 2. System Logs")
+    if st.button("Refresh Logs"):
+        st.rerun()
+        
+    logs = db.get_system_logs(limit=50)
+    if logs:
+        # Convert list of dicts to dataframe for nice view
+        # We need to format the datetime objects properly for display
+        formatted_logs = []
+        for l in logs:
+            l_copy = l.copy()
+            if 'timestamp' in l_copy and hasattr(l_copy['timestamp'], 'strftime'):
+                l_copy['timestamp'] = l_copy['timestamp'].strftime("%Y-%m-%d %H:%M:%S")
+            formatted_logs.append(l_copy)
+        
+        log_df = pd.DataFrame(formatted_logs)
+        st.dataframe(log_df, use_container_width=True)
+    else:
+        st.write("No system logs found.")
 
 def show_ai_assistant():
     st.title("Shopping Concierge")
@@ -350,12 +482,11 @@ def show_ai_assistant():
             
         with st.chat_message("assistant"):
             with st.spinner("Analyzing data..."):
-                # Enrich context with brief history summaries
                 enriched_watchlist = []
                 for item in watchlist:
                     hist = db.get_price_history(item['product_url'], limit=5)
                     item_with_hist = item.copy()
-                    item_with_hist['history_summary'] = [f"{h['timestamp'].strftime('%Y-%m-%d')}: INR {h['price']}" for h in hist if h.get('timestamp')]
+                    item_with_hist['history_summary'] = [f"{h['timestamp'].strftime('%Y-%m-%d')}: INR {h['price']}" for h in hist if hasattr(h.get('timestamp'), 'strftime')]
                     enriched_watchlist.append(item_with_hist)
                 
                 response = ai.ask_ai(prompt, watchlist_context=enriched_watchlist)
@@ -393,7 +524,7 @@ def main():
             </div>
             """, unsafe_allow_html=True)
             
-            nav = st.radio("Navigation", ["Dashboard", "Watchlist", "AI Assistant", "Settings"], label_visibility="collapsed")
+            nav = st.radio("Navigation", ["Dashboard", "Watchlist", "AI Assistant", "Developer Panel", "Settings"], label_visibility="collapsed")
             
             st.divider()
             st.markdown("### System Status")
@@ -403,6 +534,7 @@ def main():
         if nav == "Dashboard": show_dashboard()
         elif nav == "Watchlist": show_watchlist()
         elif nav == "AI Assistant": show_ai_assistant()
+        elif nav == "Developer Panel": show_developer_panel()
         elif nav == "Settings": show_settings()
     else:
         show_login_page()

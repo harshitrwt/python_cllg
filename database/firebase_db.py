@@ -162,3 +162,33 @@ class FirebaseDB:
             logger.error(f"Error fetching alerts: {e}")
             return []
 
+    def log_action(self, action_type: str, message: str) -> bool:
+        try:
+            self.db.collection("system_logs").add({
+                "action_type": action_type,
+                "message": message,
+                "timestamp": datetime.now()
+            })
+            return True
+        except Exception as e:
+            logger.error(f"Error logging action: {e}")
+            return False
+
+    def get_system_logs(self, limit: int = 50) -> List[Dict]:
+        try:
+            docs = self.db.collection("system_logs").order_by("timestamp", direction=firestore.Query.DESCENDING).limit(limit).stream()
+            # If composite index missing error occurs, we can fetch all and sort in python
+            logs = [doc.to_dict() for doc in docs]
+            return logs
+        except Exception as e:
+            try:
+                # Fallback if no index: stream all, sort in Python
+                docs = self.db.collection("system_logs").stream()
+                logs = [doc.to_dict() for doc in docs]
+                logs.sort(key=lambda x: x.get("timestamp", datetime.min), reverse=True)
+                return logs[:limit]
+            except Exception as e2:
+                logger.error(f"Error fetching logs: {e2}")
+                return []
+
+
