@@ -18,12 +18,24 @@ class FlipkartScraper:
             if not self.validate_url(url):
                 return {"error": "Invalid Flipkart product URL", "url": url, "platform": "flipkart"}
 
-            headers = get_headers()
-            time.sleep(random.uniform(1.0, 2.5))
+            for attempt in range(2):
+                headers = get_headers()
+                time.sleep(random.uniform(1.0, 3.0))
+                
+                response = self.session.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
+                
+                if response.status_code == 200:
+                    if "captcha" in response.text.lower() or "login" in response.url.lower():
+                        logger.warning(f"Flipkart block detected on attempt {attempt+1}")
+                        continue
+                    break
+                else:
+                    logger.error(f"HTTP {response.status_code} on attempt {attempt+1}")
+                    continue
             
-            response = self.session.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
-            response.raise_for_status()
-            
+            if response.status_code != 200 or "captcha" in response.text.lower():
+                 return {"error": "Flipkart blocked the request. Try again later.", "url": url, "platform": "flipkart"}
+
             soup = BeautifulSoup(response.content, 'lxml')
             
             title = None
@@ -123,6 +135,6 @@ class FlipkartScraper:
             }
     
     def validate_url(self, url: str) -> bool:
-        return "flipkart" in url.lower() and ("/p/" in url.lower() or "/itm" in url.lower())
+        return "flipkart" in url.lower() and any(x in url.lower() for x in ["/p/", "/itm", "/s/", "/dl/"])
 
 

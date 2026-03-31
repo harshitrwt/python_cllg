@@ -5,7 +5,7 @@ import plotly.express as px
 from datetime import datetime
 from database.firebase_db import FirebaseDB
 from scrapers.amazon_scraper import AmazonScraper
-from scrapers.flipkart_scraper import FlipkartScraper
+from scrapers.myntra_scraper import MyntraScraper
 from ai_assistant.groq_assistant import GroqAssistant
 from utils.notifications import send_price_drop_email
 from utils.helpers import format_price, get_price_change_percentage, format_timestamp
@@ -74,7 +74,11 @@ def get_ai():
 db = get_db()
 ai = get_ai()
 amazon_scraper = AmazonScraper()
-flipkart_scraper = FlipkartScraper()
+myntra_scraper = MyntraScraper()
+
+if st.session_state.user_logged_in and "current_name" not in st.session_state:
+    user_data = db.get_user(st.session_state.current_user)
+    st.session_state.current_name = user_data.get("name", st.session_state.current_user.split('@')[0].capitalize()) if user_data else st.session_state.current_user.split('@')[0].capitalize()
 
 def show_login_page():
     col1, col2, col3 = st.columns([1, 1.5, 1])
@@ -96,6 +100,7 @@ def show_login_page():
                         if user and user.get("password") == password:
                             st.session_state.user_logged_in = True
                             st.session_state.current_user = email.lower().strip()
+                            st.session_state.current_name = user.get("name", st.session_state.current_user.split('@')[0].capitalize())
                             save_session(st.session_state.current_user)
                             st.success("Welcome back!")
                             db.log_action("User Login", f"User logged in: {st.session_state.current_user}")
@@ -108,18 +113,19 @@ def show_login_page():
                         
         with tab2:
             with st.form("signup_form"):
-                new_email = st.text_input("Choose User ID")
+                new_name = st.text_input("Your Name")
+                new_email = st.text_input("Choose User ID (Email)")
                 new_pass = st.text_input("Create Password", type="password")
                 confirm_pass = st.text_input("Confirm Password", type="password")
                 signup_submit = st.form_submit_button("Join Now")
                 
                 if signup_submit:
-                    if new_email and new_pass == confirm_pass:
+                    if new_name and new_email and new_pass == confirm_pass:
                         email_clean = new_email.lower().strip()
                         if db.get_user(email_clean):
                             st.error("User already exists")
                         else:
-                            if db.add_user(email_clean, {"email": email_clean, "password": new_pass}):
+                            if db.add_user(email_clean, {"email": email_clean, "name": new_name.strip(), "password": new_pass}):
                                 st.success("Account created! Please log in.")
                                 time.sleep(1)
                             else:
@@ -171,7 +177,7 @@ def show_dashboard():
                 if watchlist := db.get_watchlist(st.session_state.current_user):
                     for item in watchlist:
                         url = item['product_url']
-                        scraper = amazon_scraper if "amazon" in url.lower() else flipkart_scraper
+                        scraper = amazon_scraper if "amazon" in url.lower() else myntra_scraper
                         new_data = scraper.scrape_product(url)
                         db.log_action("Auto Sync", f"Checking {url}")
                         if new_data.get("success"):
@@ -304,7 +310,7 @@ def show_watchlist():
     
     with st.expander("Add New Product", expanded=True):
         col1, col2 = st.columns([4, 1])
-        url = col1.text_input("Paste Amazon or Flipkart URL here", placeholder="https://...")
+        url = col1.text_input("Paste Amazon or Myntra URL here", placeholder="https://...")
         target_price = col2.number_input("Target Price (optional)", min_value=0.0, step=100.0)
         
         if st.button("Analyze and Add", use_container_width=True):
@@ -312,7 +318,7 @@ def show_watchlist():
                 with st.spinner("Extracting product intelligence..."):
                     scraper = None
                     if "amazon" in url.lower(): scraper = amazon_scraper
-                    elif "flipkart" in url.lower(): scraper = flipkart_scraper
+                    elif "myntra" in url.lower(): scraper = myntra_scraper
                     
                     if scraper:
                         product_data = scraper.scrape_product(url)
@@ -333,7 +339,7 @@ def show_watchlist():
                         else:
                             st.error(f"Scraping failed: {product_data.get('error', 'Unknown error')}")
                     else:
-                        st.error("Platform not supported yet. We support Amazon & Flipkart.")
+                        st.error("Platform not supported yet. We support Amazon & Myntra.")
             else:
                 st.warning("Please enter a URL")
 
@@ -518,9 +524,9 @@ def main():
     if st.session_state.user_logged_in:
         with st.sidebar:
             st.markdown(f"""
-            <div class="sidebar-stats">
-                <p style="margin:0; font-size: 0.8rem; opacity: 0.8;">Welcome back,</p>
-                <h2 style="margin:0; font-size: 1.5rem;">{st.session_state.current_user.split('@')[0].capitalize()}</h2>
+            <div style="padding-bottom: 20px; text-align: center;">
+                <p style="margin:0; font-size: 1rem; color: #94a3b8;">Welcome back,</p>
+                <h2 style="margin:0; font-size: 1.8rem; color: white;">{st.session_state.get('current_name', 'User')}</h2>
             </div>
             """, unsafe_allow_html=True)
             
