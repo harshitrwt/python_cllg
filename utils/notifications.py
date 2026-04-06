@@ -12,7 +12,6 @@ def send_price_drop_email(recipient_email: str, product_name: str, old_price: fl
     """
     logger.info(f"Triggering email notification to {recipient_email} for {product_name}")
     
-    # We will use noreply@betterdeals.com if the user hasn't explicitly set SENDER_EMAIL
     current_sender_email = SENDER_EMAIL if SENDER_EMAIL else "noreply@betterdeals.com"
     
     if not MAILERSEND_API_KEY:

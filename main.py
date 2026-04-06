@@ -13,6 +13,7 @@ import time
 import json
 import os
 import random
+from config import GROQ_API_KEY, GROQ_MODEL
 
 SESSION_FILE = "local_session.json"
 
@@ -525,7 +526,7 @@ def main():
         with st.sidebar:
             st.markdown(f"""
             <div style="padding-bottom: 20px; text-align: center;">
-                <p style="margin:0; font-size: 1rem; color: #94a3b8;">Welcome back,</p>
+                <p style="margin:0; font-size: 1rem; color: rgba(248, 250, 252, 0.68);">Welcome back,</p>
                 <h2 style="margin:0; font-size: 1.8rem; color: white;">{st.session_state.get('current_name', 'User')}</h2>
             </div>
             """, unsafe_allow_html=True)
@@ -533,9 +534,12 @@ def main():
             nav = st.radio("Navigation", ["Dashboard", "Watchlist", "AI Assistant", "Developer Panel", "Settings"], label_visibility="collapsed")
             
             st.divider()
-            st.markdown("### System Status")
-            st.success("Firebase Backend Connected")
-            st.success("Analysis Engine Ready")
+            st.markdown("### AI Assistant")
+            if GROQ_API_KEY:
+                st.success(f"Groq ready ({GROQ_MODEL})")
+            else:
+                st.warning("Groq API key missing")
+            st.info("Auto-sync: every 5 min")
             
         if nav == "Dashboard": show_dashboard()
         elif nav == "Watchlist": show_watchlist()

@@ -27,44 +27,63 @@ def set_page_theme():
     st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
+
+        :root {
+            --bd-bg-0: #000000;
+            --bd-bg-1: #000000;
+            --bd-surface-0: rgba(255, 255, 255, 0.04);
+            --bd-surface-1: rgba(255, 255, 255, 0.03);
+            --bd-border: rgba(255, 255, 255, 0.10);
+            --bd-border-strong: rgba(255, 255, 255, 0.14);
+            --bd-text: #f8fafc;
+            --bd-text-muted: rgba(248, 250, 252, 0.68);
+            --bd-text-soft: rgba(248, 250, 252, 0.82);
+            --bd-accent-0: #facc15; /* yellow */
+            --bd-accent-1: #eab308; /* yellow hover */
+            --bd-accent-2: #facc15;
+        }
         
-        .main {
-            background: radial-gradient(circle at top right, #1e293b, #0f172a);
-            color: #f8fafc;
+        body, .stApp, [data-testid="stAppViewContainer"], .main {
+            background: var(--bd-bg-0);
+            color: var(--bd-text);
             font-family: 'Outfit', sans-serif;
+        }
+
+        [data-testid="stHeader"] {
+            background: transparent !important;
         }
         
         [data-testid="stSidebar"] {
-            background-color: rgba(15, 23, 42, 0.95);
-            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            background-color: rgba(0, 0, 0, 0.92);
+            border-right: 1px solid var(--bd-border);
             backdrop-filter: blur(10px);
         }
         
         .stMetric {
-            background: rgba(15, 23, 42, 0.4) !important;
+            background: var(--bd-surface-1) !important;
             padding: 12px 18px !important;
             border-radius: 12px !important;
-            border: 1px solid rgba(255, 255, 255, 0.05) !important;
+            border: 1px solid var(--bd-border) !important;
         }
         
         .stMetric label {
-            color: #94a3b8 !important;
+            color: var(--bd-text-muted) !important;
             font-weight: 500 !important;
             font-size: 0.85rem !important;
         }
         
         .stMetric [data-testid="stMetricValue"] {
-            color: #f8fafc !important;
+            color: var(--bd-text) !important;
             font-size: 1.4rem !important;
             font-weight: 700 !important;
         }
 
         .product-card {
-            background: rgba(30, 41, 59, 0.4);
+            background: var(--bd-surface-0);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
             border-radius: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--bd-border-strong);
             padding: 15px;
             margin-bottom: 20px;
             height: 380px;
@@ -76,8 +95,8 @@ def set_page_theme():
         
         .product-card:hover {
             transform: translateY(-5px);
-            background: rgba(30, 41, 59, 0.6);
-            border-color: #10b981;
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(250, 204, 21, 0.65);
             box-shadow: 0 15px 30px rgba(0,0,0,0.3);
         }
 
@@ -93,9 +112,10 @@ def set_page_theme():
         .price-tag {
             font-size: 22px;
             font-weight: 800;
-            background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            background: none;
+            color: var(--bd-accent-0);
+            -webkit-background-clip: initial;
+            -webkit-text-fill-color: var(--bd-accent-0);
         }
         
         .platform-badge {
@@ -108,11 +128,11 @@ def set_page_theme():
             box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         }
         
-        .amazon-badge { background: linear-gradient(90deg, #FF9900, #FFB84D); color: #000; }
-        .flipkart-badge { background: linear-gradient(90deg, #2874F0, #6197EF); color: #fff; }
+        .amazon-badge { background: #FF9900; color: #000; }
+        .flipkart-badge { background: #2874F0; color: #fff; }
         
         .sidebar-stats {
-            background: linear-gradient(45deg, #059669 0%, #3b82f6 100%);
+            background: rgba(250, 204, 21, 0.10);
             padding: 20px;
             border-radius: 18px;
             margin-bottom: 25px;
@@ -120,13 +140,13 @@ def set_page_theme():
         }
         
         h1, h2, h3, h4, .stSubheader {
-            color: #f8fafc !important;
+            color: var(--bd-text) !important;
             font-weight: 700 !important;
         }
         
         .stButton>button {
-            background: linear-gradient(90deg, #10b981 0%, #059669 100%) !important;
-            color: white !important;
+            background: var(--bd-accent-0) !important;
+            color: #000 !important;
             border: none !important;
             padding: 10px 24px !important;
             border-radius: 12px !important;
@@ -137,13 +157,14 @@ def set_page_theme():
         .stButton>button:hover {
             opacity: 0.9 !important;
             transform: scale(1.02) !important;
-            box-shadow: 0 8px 15px rgba(16, 185, 129, 0.3) !important;
+            background: var(--bd-accent-1) !important;
+            box-shadow: 0 8px 15px rgba(250, 204, 21, 0.20) !important;
         }
 
         .stAlert {
-            background-color: rgba(30, 41, 59, 0.6) !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
-            color: #f8fafc !important;
+            background-color: rgba(15, 23, 42, 0.7) !important;
+            border: 1px solid var(--bd-border-strong) !important;
+            color: var(--bd-text) !important;
         }
 
         div[data-baseweb="tab-list"] {
@@ -151,22 +172,45 @@ def set_page_theme():
         }
 
         div[data-baseweb="tab"] {
-            color: #94a3b8 !important;
+            color: var(--bd-text-muted) !important;
         }
 
         div[aria-selected="true"] {
-            color: #10b981 !important;
-            border-bottom-color: #10b981 !important;
+            color: var(--bd-accent-0) !important;
+            border-bottom-color: var(--bd-accent-0) !important;
         }
         
         p, span, label {
-            color: #cbd5e1 !important;
+            color: var(--bd-text-soft) !important;
+        }
+
+        a, a:visited {
+            color: var(--bd-accent-0) !important;
         }
         
         input {
-            background-color: rgba(30, 41, 59, 0.8) !important;
+            background-color: rgba(2, 6, 23, 0.65) !important;
             color: white !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            border: 1px solid var(--bd-border-strong) !important;
+        }
+
+        textarea {
+            background-color: rgba(2, 6, 23, 0.65) !important;
+            color: white !important;
+            border: 1px solid var(--bd-border-strong) !important;
+        }
+
+        [data-testid="stExpander"] {
+            border-color: var(--bd-border) !important;
+        }
+
+        [data-testid="stChatMessage"] {
+            background-color: rgba(15, 23, 42, 0.45) !important;
+            color: var(--bd-text) !important;
+        }
+
+        [data-testid="stDataFrame"] {
+            border-color: var(--bd-border) !important;
         }
     </style>
     """, unsafe_allow_html=True)

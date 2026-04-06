@@ -39,7 +39,7 @@ def show_ai_assistant():
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("📊 Show my watchlist summary"):
+        if st.button("Show my watchlist summary"):
             if watchlist:
                 summary = "**Your current watchlist:**\n\n"
                 for item in watchlist:
@@ -50,7 +50,7 @@ def show_ai_assistant():
                 st.warning("Your watchlist is empty!")
     
     with col2:
-        if st.button("🏆 Best time to buy?"):
+        if st.button(" Best time to buy?"):
             if watchlist:
                 with st.spinner("Analyzing your entire watchlist..."):
                     enriched_watchlist = []
