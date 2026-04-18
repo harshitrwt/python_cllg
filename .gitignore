@@ -20,3 +20,8 @@ serviceAccount.json
 .streamlit/
 data/
 logs/
+
+
+ml_model/fashion_classifier.h5
+ml_model/class_labels.json
+

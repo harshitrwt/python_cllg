@@ -14,6 +14,7 @@ import json
 import os
 import random
 from config import GROQ_API_KEY, GROQ_MODEL
+from ml_model.predictor import FashionPredictor
 
 SESSION_FILE = "local_session.json"
 
@@ -76,6 +77,12 @@ db = get_db()
 ai = get_ai()
 amazon_scraper = AmazonScraper()
 myntra_scraper = MyntraScraper()
+
+@st.cache_resource
+def get_cnn():
+    return FashionPredictor()
+
+cnn_predictor = get_cnn()
 
 if st.session_state.user_logged_in and "current_name" not in st.session_state:
     user_data = db.get_user(st.session_state.current_user)
@@ -141,7 +148,7 @@ def show_product_details(item, history):
     
     col1, col2 = st.columns([1, 2])
     with col1:
-        st.image(data.get('image_url'), use_column_width=True)
+        st.image(data.get('image_url'), width=True)
         st.markdown(f"**Current Price:** ₹{data.get('price', 0):,.2f}")
         if item.get('target_price'):
             st.markdown(f"**Target Price:** ₹{item.get('target_price'):,.2f}")
@@ -228,6 +235,28 @@ def show_dashboard():
         st.metric("Best Drop", f"{best_drop:.1f}%" if best_drop > 0 else "0%", best_product)
     with c4:
         st.metric("Est. Savings", f"INR {total_savings:,.2f}")
+
+    # ─── CNN Category Distribution ───────────────────────────────
+    if cnn_predictor.is_ready() and watchlist:
+        st.divider()
+        st.subheader("🧠 CNN Product Categories")
+        categories = []
+        for item in watchlist:
+            cat = item.get('product_data', {}).get('cnn_category')
+            if cat:
+                categories.append(cat)
+        if categories:
+            cat_df = pd.DataFrame({"Category": categories})
+            cat_counts = cat_df["Category"].value_counts().reset_index()
+            cat_counts.columns = ["Category", "Count"]
+            fig = px.pie(cat_counts, names="Category", values="Count",
+                         title="Watchlist — CNN Classified Categories",
+                         template="plotly_dark",
+                         color_discrete_sequence=px.colors.qualitative.Set3)
+            fig.update_layout(margin=dict(l=0, r=0, t=40, b=0), height=300)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("CNN categories will appear here once products are classified. Try the Visual Search page!")
 
     if triggered_alerts:
         for alert in triggered_alerts:
@@ -326,6 +355,16 @@ def show_watchlist():
                         if product_data.get("success"):
                             if target_price > 0:
                                 product_data["target_price"] = target_price
+                            
+                            # ─── CNN Auto-Classification ─────────────
+                            if cnn_predictor.is_ready() and product_data.get('image_url'):
+                                with st.spinner("🧠 CNN classifying product..."):
+                                    cnn_result = cnn_predictor.predict_from_url(product_data['image_url'])
+                                    if cnn_result.get('success'):
+                                        product_data['cnn_category'] = cnn_result['top_class']
+                                        product_data['cnn_confidence'] = round(cnn_result['confidence'] * 100, 1)
+                                        st.info(f"🏷️ CNN classified as: **{cnn_result['top_class']}** ({product_data['cnn_confidence']}% confidence)")
+                            
                             res = db.add_to_watchlist(st.session_state.current_user, url, product_data)
                             if res:
                                 db.add_price_history(url, product_data['price'])
@@ -357,7 +396,7 @@ def show_watchlist():
                 c1, c2, c3 = st.columns([1, 2.5, 1])
                 
                 with c1:
-                    st.image(data.get('image_url'), use_column_width=True)
+                    st.image(data.get('image_url'), width=True)
                 
                 with c2:
                     change_text = ""
@@ -458,6 +497,279 @@ def show_developer_panel():
         st.dataframe(log_df, use_container_width=True)
     else:
         st.write("No system logs found.")
+    
+    # ─── CNN Model Metrics ────────────────────────────────────────
+    st.divider()
+    st.markdown("### 3. CNN Model Metrics")
+    if cnn_predictor.is_ready():
+        summary = cnn_predictor.get_model_summary()
+        if summary:
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Classes", summary['num_classes'])
+            c2.metric("Parameters", f"{summary['total_params']:,}")
+            c3.metric("Model Size", f"{summary['model_size_mb']} MB")
+            st.write(f"**Classes:** {', '.join(summary['classes'])}")
+        
+        history = cnn_predictor.get_training_history()
+        if history:
+            st.markdown("#### Training History")
+            col1, col2 = st.columns(2)
+            with col1:
+                hist_df = pd.DataFrame({
+                    "Epoch": list(range(1, len(history.get('accuracy', [])) + 1)),
+                    "Train": history.get('accuracy', []),
+                    "Validation": history.get('val_accuracy', [])
+                })
+                fig = px.line(hist_df, x="Epoch", y=["Train", "Validation"],
+                              title="Accuracy", template="plotly_dark", markers=True)
+                fig.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=250)
+                st.plotly_chart(fig, use_container_width=True)
+            with col2:
+                loss_df = pd.DataFrame({
+                    "Epoch": list(range(1, len(history.get('loss', [])) + 1)),
+                    "Train": history.get('loss', []),
+                    "Validation": history.get('val_loss', [])
+                })
+                fig = px.line(loss_df, x="Epoch", y=["Train", "Validation"],
+                              title="Loss", template="plotly_dark", markers=True)
+                fig.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=250)
+                st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("CNN model not trained yet. Run: `python -m ml_model.train_model`")
+
+def show_visual_search():
+    """Visual Search page — upload an image and classify it with CNN."""
+    st.title("Visual Search (CNN)")
+    st.markdown("Upload any fashion product image and our **MobileNetV2 CNN** will identify the product type, find similar items in your watchlist, and give you **smart price insights** for that category.")
+    
+    if not cnn_predictor.is_ready():
+        st.error("CNN model not available. Please train the model first:")
+        st.code("python -m ml_model.train_model", language="bash")
+        return
+    
+    summary = cnn_predictor.get_model_summary()
+    if summary:
+        st.markdown(f"""<div style="background: #1e293b; padding: 12px 18px; border-radius: 8px; border: 1px solid #334155; margin-bottom: 20px;">
+        <span style="color: #22c55e; font-weight: bold;">Model Active</span>&nbsp;&nbsp;|&nbsp;&nbsp;
+        <span style="color: #94a3b8;">MobileNetV2</span>&nbsp;&nbsp;|&nbsp;&nbsp;
+        <span style="color: #94a3b8;">{summary['num_classes']} classes</span>&nbsp;&nbsp;|&nbsp;&nbsp;
+        <span style="color: #94a3b8;">{summary['model_size_mb']} MB</span>
+        </div>""", unsafe_allow_html=True)
+    
+    col1, col2 = st.columns([1, 1])
+    
+    with col1:
+        st.markdown("### Upload Image")
+        uploaded_file = st.file_uploader(
+            "Choose a fashion product image",
+            type=["jpg", "jpeg", "png", "webp"],
+            help="Upload a clear image of a fashion product (clothing, shoes, etc.)"
+        )
+        
+        image_url = st.text_input(
+            "Or paste an image URL",
+            placeholder="https://example.com/product-image.jpg"
+        )
+    
+    result = None
+    display_image = None
+    
+    if uploaded_file is not None:
+        from PIL import Image as PILImage
+        display_image = PILImage.open(uploaded_file)
+        with st.spinner("CNN analyzing image..."):
+            uploaded_file.seek(0)
+            result = cnn_predictor.predict_from_file(uploaded_file)
+    elif image_url:
+        if st.button("Classify from URL", use_container_width=True):
+            with st.spinner("Downloading and analyzing..."):
+                result = cnn_predictor.predict_from_url(image_url)
+                if result.get('success'):
+                    try:
+                        import requests as req
+                        from PIL import Image as PILImage
+                        from io import BytesIO
+                        resp = req.get(image_url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+                        display_image = PILImage.open(BytesIO(resp.content))
+                    except:
+                        pass
+    
+    with col2:
+        if display_image:
+            st.markdown("### Input Image")
+            st.image(display_image, width=True)
+    
+    if result:
+        st.divider()
+        if result.get("success"):
+            top = result['predictions'][0]
+            detected_category = top['class']
+            confidence = top['confidence']
+        
+            st.markdown("### Classification Results")
+            
+            st.markdown(f"""<div style="background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); 
+                padding: 25px; border-radius: 12px; text-align: center; margin-bottom: 20px; 
+                border: 1px solid #3b82f6;">
+                <h2 style="margin:0; color: #f8fafc;">{detected_category}</h2>
+                <p style="margin: 8px 0 0 0; color: #60a5fa; font-size: 1.4rem; font-weight: bold;">
+                    {confidence*100:.1f}% Confidence
+                </p>
+            </div>""", unsafe_allow_html=True)
+            
+            # Top predictions with progress bars
+            st.markdown("#### All Predictions")
+            for pred in result['predictions']:
+                col_a, col_b, col_c = st.columns([2, 4, 1])
+                with col_a:
+                    st.write(f"**{pred['class']}**")
+                with col_b:
+                    st.progress(pred['confidence'])
+                with col_c:
+                    st.write(f"{pred['confidence']*100:.1f}%")
+            
+            # ─── Section 2: Category Price Intelligence ─────────────
+            st.divider()
+            st.markdown(f"### Price Intelligence for *{detected_category}*")
+            st.markdown(f"Here's what we know about **{detected_category}** products across your watchlist:")
+            
+            watchlist = db.get_watchlist(st.session_state.current_user)
+            
+            # Find all products matching this category
+            matches = []
+            for item in watchlist:
+                item_cat = item.get('product_data', {}).get('cnn_category', '')
+                if item_cat.lower() == detected_category.lower():
+                    matches.append(item)
+            
+            if matches:
+                prices = [m['product_data']['price'] for m in matches]
+                avg_price = sum(prices) / len(prices)
+                min_price = min(prices)
+                max_price = max(prices)
+                cheapest_item = min(matches, key=lambda x: x['product_data']['price'])
+                
+                # Price stats cards
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric(f"Tracked {detected_category}", len(matches))
+                c2.metric("Avg Price", f"INR {avg_price:,.0f}")
+                c3.metric("Cheapest", f"INR {min_price:,.0f}")
+                c4.metric("Most Expensive", f"INR {max_price:,.0f}")
+                
+                # Smart recommendation
+                st.markdown("#### Smart Recommendation")
+                
+                # Check price history trends for this category
+                all_drops = []
+                for m in matches:
+                    history = db.get_price_history(m['product_url'])
+                    if history and len(history) > 1:
+                        first_price = history[-1]['price']
+                        current_price = m['product_data']['price']
+                        change_pct = ((current_price - first_price) / first_price) * 100
+                        all_drops.append(change_pct)
+                
+                if all_drops:
+                    avg_trend = sum(all_drops) / len(all_drops)
+                    if avg_trend < -5:
+                        st.success(f"""**BUY NOW** — {detected_category} prices are trending DOWN (avg {abs(avg_trend):.1f}% drop). 
+                        The cheapest {detected_category} in your watchlist is **{cheapest_item['product_data']['title'][:50]}** at **INR {min_price:,.2f}**.""")
+                    elif avg_trend > 5:
+                        st.warning(f"""**WAIT** — {detected_category} prices are trending UP (avg {avg_trend:.1f}% increase). 
+                        Prices may come down during upcoming sales. Keep tracking!""")
+                    else:
+                        st.info(f"""**STABLE** — {detected_category} prices are holding steady. 
+                        Best current deal: **{cheapest_item['product_data']['title'][:50]}** at **INR {min_price:,.2f}**.""")
+                else:
+                    st.info(f"Add more price history data to get buy/wait recommendations for {detected_category}.")
+                
+                # ─── Section 3: Matching Products ───────────────────
+                st.divider()
+                st.markdown(f"#### Your {detected_category} Products ({len(matches)} found)")
+                
+                # Show by platform for cross-platform comparison
+                platforms = {}
+                for m in matches:
+                    plat = m['product_data'].get('platform', 'unknown')
+                    if plat not in platforms:
+                        platforms[plat] = []
+                    platforms[plat].append(m)
+                
+                if len(platforms) > 1:
+                    st.markdown(f"**Cross-Platform Comparison:** You're tracking {detected_category} on **{', '.join(p.capitalize() for p in platforms.keys())}**")
+                    for plat, items in platforms.items():
+                        plat_prices = [i['product_data']['price'] for i in items]
+                        plat_avg = sum(plat_prices) / len(plat_prices)
+                        st.write(f"- **{plat.capitalize()}**: {len(items)} products, avg INR {plat_avg:,.0f}")
+                    
+                    cheapest_platform = min(platforms.keys(), key=lambda p: sum(i['product_data']['price'] for i in platforms[p]) / len(platforms[p]))
+                    st.success(f"**{cheapest_platform.capitalize()}** has the cheapest {detected_category} on average!")
+                
+                mcols = st.columns(min(3, len(matches)))
+                for i, match in enumerate(matches[:6]):
+                    with mcols[i % 3]:
+                        mdata = match['product_data']
+                        st.image(mdata.get('image_url', ''), width=True)
+                        st.write(f"**{mdata['title'][:40]}...**")
+                        st.write(f"INR {mdata['price']:,.2f} | {mdata.get('platform', '').capitalize()}")
+                        target = match.get('target_price')
+                        if target:
+                            if mdata['price'] <= target:
+                                st.success(f"Below target (INR {target:,.0f})")
+                            else:
+                                st.caption(f"Target: INR {target:,.0f}")
+            else:
+                st.info(f"No **{detected_category}** products in your watchlist yet. Add some products to get category-level price analytics!")
+                st.markdown(f"""**What you'll see once you track {detected_category} products:**
+- Average, min, max prices across all your tracked {detected_category}
+- Buy/Wait recommendation based on price trends
+- Cross-platform price comparison (Amazon vs Myntra)
+- Cheapest option highlighted""")
+        else:
+            st.error(f"Classification failed: {result.get('error', 'Unknown error')}")
+    
+    # ─── Section 4: Category-Grouped Watchlist Overview ─────────
+    st.divider()
+    st.markdown("### Your Watchlist — Grouped by CNN Category")
+    st.markdown("All your tracked products, intelligently organized by what the CNN detected:")
+    
+    watchlist = db.get_watchlist(st.session_state.current_user)
+    
+    if watchlist:
+        # Group by CNN category
+        category_groups = {}
+        uncategorized = []
+        for item in watchlist:
+            cat = item.get('product_data', {}).get('cnn_category', '')
+            if cat:
+                if cat not in category_groups:
+                    category_groups[cat] = []
+                category_groups[cat].append(item)
+            else:
+                uncategorized.append(item)
+        
+        if category_groups:
+            # Summary metrics
+            st.markdown(f"**{len(category_groups)} categories detected** across {len(watchlist)} products")
+            
+            for cat_name, items in sorted(category_groups.items(), key=lambda x: -len(x[1])):
+                prices = [i['product_data']['price'] for i in items]
+                with st.expander(f"{cat_name} — {len(items)} product(s) | Avg INR {sum(prices)/len(prices):,.0f}", expanded=False):
+                    cols = st.columns(min(3, len(items)))
+                    for i, item in enumerate(items[:6]):
+                        with cols[i % 3]:
+                            data = item['product_data']
+                            st.image(data.get('image_url', ''), width=True)
+                            st.write(f"**{data['title'][:35]}...**")
+                            st.write(f"INR {data['price']:,.2f}")
+        
+        if uncategorized:
+            with st.expander(f"Uncategorized — {len(uncategorized)} product(s) (added before CNN)", expanded=False):
+                st.markdown("These products were added before CNN integration. Re-add them to auto-classify.")
+                for item in uncategorized:
+                    st.write(f"- {item['product_data']['title'][:60]}...")
+    else:
+        st.info("Your watchlist is empty. Add products from the Watchlist page to see them organized by category here.")
 
 def show_ai_assistant():
     st.title("Shopping Concierge")
@@ -531,7 +843,7 @@ def main():
             </div>
             """, unsafe_allow_html=True)
             
-            nav = st.radio("Navigation", ["Dashboard", "Watchlist", "AI Assistant", "Developer Panel", "Settings"], label_visibility="collapsed")
+            nav = st.radio("Navigation", ["Dashboard", "Watchlist", "Visual Search (CNN)", "AI Assistant", "Developer Panel", "Settings"], label_visibility="collapsed")
             
             st.divider()
             st.markdown("### AI Assistant")
@@ -541,8 +853,17 @@ def main():
                 st.warning("Groq API key missing")
             st.info("Auto-sync: every 5 min")
             
+            st.divider()
+            st.markdown("### CNN Model")
+            if cnn_predictor.is_ready():
+                model_info = cnn_predictor.get_model_summary()
+                st.success(f"MobileNetV2 ({model_info['num_classes']} classes)")
+            else:
+                st.warning("Model not trained")
+            
         if nav == "Dashboard": show_dashboard()
         elif nav == "Watchlist": show_watchlist()
+        elif nav == "Visual Search (CNN)": show_visual_search()
         elif nav == "AI Assistant": show_ai_assistant()
         elif nav == "Developer Panel": show_developer_panel()
         elif nav == "Settings": show_settings()
