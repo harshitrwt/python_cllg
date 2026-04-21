@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-# Suppress TF info logs
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 import tensorflow as tf
@@ -26,7 +26,7 @@ from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCh
 from tensorflow.keras.optimizers import Adam
 from sklearn.model_selection import train_test_split
 
-# ─── Configuration ───────────────────────────────────────────────
+
 IMG_SIZE = 224
 BATCH_SIZE = 32
 EPOCHS = 15
